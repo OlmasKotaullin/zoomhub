@@ -1,0 +1,11 @@
+{% if meetings %}
+<div class="space-y-3">
+  {% for meeting in meetings %}
+    {% include "partials/meeting_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-16">
+  <p class="text-txt-faint text-sm">Ничего не найдено</p>
+</div>
+{% endif %}

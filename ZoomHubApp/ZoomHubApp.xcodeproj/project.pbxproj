@@ -1,0 +1,393 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		22449B8DD57DB7231A3917FC /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7443B7449729457B01CB783C /* NotificationManager.swift */; };
+		258E36E18D6034ED28284A12 /* UploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC8B0B9E8610B4C0A02F693 /* UploadView.swift */; };
+		263BDC927281D98B6C52C9AE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F1C48D92676A80148683A46 /* ContentView.swift */; };
+		344F765BB29BE33CD48C8450 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9A9DD754965908654F078D0 /* MenuBarView.swift */; };
+		5780BF5F0CA5B677E9484B87 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F1E8A4BB722E5D49405B6 /* APIClient.swift */; };
+		579B8D9C9C6A6B7959ADE738 /* Meeting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98EAA9DA3CD6E56F5ED9A4D2 /* Meeting.swift */; };
+		ACD563302BA26398C99A8CB4 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FE1FE7952E47889EB130B63 /* OnboardingView.swift */; };
+		BF890BD72B7933FF29631ECE /* MeetingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149297BFE862A3AB8F026A9C /* MeetingDetailView.swift */; };
+		C418814EFCD8CC6E4F3B02C8 /* ChatTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 676D1FA50FDB8A49F4120B4E /* ChatTabView.swift */; };
+		C4C6806216B8C588D5792F9B /* BackendManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2B4F744991D50AC63EA74ED /* BackendManager.swift */; };
+		D743F7C5C65F40BEC37C7547 /* ZoomHubApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2736D1274C48CB76E53F9CC /* ZoomHubApp.swift */; };
+		EBA03EC0B8565FF773EA27C9 /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37269297CC2DA2666CB5A79A /* ExportService.swift */; };
+		F77117E29EA412D2178A1F75 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F80C8BF15907CBE061F8FAD /* DashboardView.swift */; };
+		FD390A3E21BE13E94DA90797 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21C77C6E89F03327C8CEE9C6 /* SettingsView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0FE1FE7952E47889EB130B63 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		149297BFE862A3AB8F026A9C /* MeetingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingDetailView.swift; sourceTree = "<group>"; };
+		21C77C6E89F03327C8CEE9C6 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		37269297CC2DA2666CB5A79A /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
+		3F80C8BF15907CBE061F8FAD /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		676D1FA50FDB8A49F4120B4E /* ChatTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTabView.swift; sourceTree = "<group>"; };
+		7443B7449729457B01CB783C /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		8F1C48D92676A80148683A46 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		98EAA9DA3CD6E56F5ED9A4D2 /* Meeting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Meeting.swift; sourceTree = "<group>"; };
+		C9A9DD754965908654F078D0 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		D2736D1274C48CB76E53F9CC /* ZoomHubApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomHubApp.swift; sourceTree = "<group>"; };
+		D3068B64985BC48E4DAEF751 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E2B4F744991D50AC63EA74ED /* BackendManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendManager.swift; sourceTree = "<group>"; };
+		E4F6B776705A7C7FC3FB67AD /* ZoomHubApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZoomHubApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F07F1E8A4BB722E5D49405B6 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		FEC8B0B9E8610B4C0A02F693 /* UploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadView.swift; sourceTree = "<group>"; };
+		FED14AFAA48595AD8B80DB9F /* ZoomHubApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZoomHubApp.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		584BBA9E0FB3EEF2481DA948 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				98EAA9DA3CD6E56F5ED9A4D2 /* Meeting.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		603C601964BDC702AF007469 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				F07F1E8A4BB722E5D49405B6 /* APIClient.swift */,
+				E2B4F744991D50AC63EA74ED /* BackendManager.swift */,
+				37269297CC2DA2666CB5A79A /* ExportService.swift */,
+				7443B7449729457B01CB783C /* NotificationManager.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		8237C7B49F9F20FA7EA985F0 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				D3068B64985BC48E4DAEF751 /* Info.plist */,
+				FED14AFAA48595AD8B80DB9F /* ZoomHubApp.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		851DDCF4EB9A4CC971420119 /* ZoomHubApp */ = {
+			isa = PBXGroup;
+			children = (
+				D2736D1274C48CB76E53F9CC /* ZoomHubApp.swift */,
+				584BBA9E0FB3EEF2481DA948 /* Models */,
+				8237C7B49F9F20FA7EA985F0 /* Resources */,
+				603C601964BDC702AF007469 /* Services */,
+				B6263316FB3A6415FE2773C8 /* Views */,
+			);
+			path = ZoomHubApp;
+			sourceTree = "<group>";
+		};
+		AFEAE5E6DF2C03F7D3DE4BDC /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E4F6B776705A7C7FC3FB67AD /* ZoomHubApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B6263316FB3A6415FE2773C8 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				676D1FA50FDB8A49F4120B4E /* ChatTabView.swift */,
+				8F1C48D92676A80148683A46 /* ContentView.swift */,
+				3F80C8BF15907CBE061F8FAD /* DashboardView.swift */,
+				149297BFE862A3AB8F026A9C /* MeetingDetailView.swift */,
+				C9A9DD754965908654F078D0 /* MenuBarView.swift */,
+				0FE1FE7952E47889EB130B63 /* OnboardingView.swift */,
+				21C77C6E89F03327C8CEE9C6 /* SettingsView.swift */,
+				FEC8B0B9E8610B4C0A02F693 /* UploadView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		C6B6B82308256AB76CABE266 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				851DDCF4EB9A4CC971420119 /* ZoomHubApp */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		CEE8CD254868E62C7FE859E9 = {
+			isa = PBXGroup;
+			children = (
+				C6B6B82308256AB76CABE266 /* Sources */,
+				AFEAE5E6DF2C03F7D3DE4BDC /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6951F0105EF110EEE05B757C /* ZoomHubApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 53A159334B50E094DA485356 /* Build configuration list for PBXNativeTarget "ZoomHubApp" */;
+			buildPhases = (
+				6BF459911DF5B202394117DE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ZoomHubApp;
+			packageProductDependencies = (
+			);
+			productName = ZoomHubApp;
+			productReference = E4F6B776705A7C7FC3FB67AD /* ZoomHubApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1AFA320C54630E2B006DDA71 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					6951F0105EF110EEE05B757C = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = E84AEBC6145BE4673DAF4D05 /* Build configuration list for PBXProject "ZoomHubApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = CEE8CD254868E62C7FE859E9;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = AFEAE5E6DF2C03F7D3DE4BDC /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6951F0105EF110EEE05B757C /* ZoomHubApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6BF459911DF5B202394117DE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5780BF5F0CA5B677E9484B87 /* APIClient.swift in Sources */,
+				C4C6806216B8C588D5792F9B /* BackendManager.swift in Sources */,
+				C418814EFCD8CC6E4F3B02C8 /* ChatTabView.swift in Sources */,
+				263BDC927281D98B6C52C9AE /* ContentView.swift in Sources */,
+				F77117E29EA412D2178A1F75 /* DashboardView.swift in Sources */,
+				EBA03EC0B8565FF773EA27C9 /* ExportService.swift in Sources */,
+				579B8D9C9C6A6B7959ADE738 /* Meeting.swift in Sources */,
+				BF890BD72B7933FF29631ECE /* MeetingDetailView.swift in Sources */,
+				344F765BB29BE33CD48C8450 /* MenuBarView.swift in Sources */,
+				22449B8DD57DB7231A3917FC /* NotificationManager.swift in Sources */,
+				ACD563302BA26398C99A8CB4 /* OnboardingView.swift in Sources */,
+				FD390A3E21BE13E94DA90797 /* SettingsView.swift in Sources */,
+				258E36E18D6034ED28284A12 /* UploadView.swift in Sources */,
+				D743F7C5C65F40BEC37C7547 /* ZoomHubApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0099790AD31545619562696A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		1B932446A1E1A882AB748819 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/ZoomHubApp/Resources/ZoomHubApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Sources/ZoomHubApp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.almazgataullin.ZoomHubApp;
+				PRODUCT_NAME = ZoomHub;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		4794D77A9A7B08D1B9EA8203 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E5DB62F5A3061A1AD5CA750D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Sources/ZoomHubApp/Resources/ZoomHubApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Sources/ZoomHubApp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.almazgataullin.ZoomHubApp;
+				PRODUCT_NAME = ZoomHub;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		53A159334B50E094DA485356 /* Build configuration list for PBXNativeTarget "ZoomHubApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1B932446A1E1A882AB748819 /* Debug */,
+				E5DB62F5A3061A1AD5CA750D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E84AEBC6145BE4673DAF4D05 /* Build configuration list for PBXProject "ZoomHubApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4794D77A9A7B08D1B9EA8203 /* Debug */,
+				0099790AD31545619562696A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1AFA320C54630E2B006DDA71 /* Project object */;
+}

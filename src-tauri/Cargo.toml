@@ -1,0 +1,18 @@
+[package]
+name = "zoomhub"
+version = "0.1.0"
+description = "ZoomHub — нативное macOS приложение для обработки записей встреч"
+authors = ["Almaz Gataullin"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["process", "time"] }
+libc = "0.2"

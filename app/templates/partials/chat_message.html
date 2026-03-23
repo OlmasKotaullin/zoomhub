@@ -1,0 +1,17 @@
+{% for msg in messages %}
+<div class="flex gap-3 {% if msg.role.value == 'assistant' %}zoom-gradient-light -mx-4 px-4 py-3 rounded-xl{% endif %}">
+  <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 {% if msg.role.value == 'user' %}bg-g-100 text-g-600{% else %}bg-ai/12 text-ai{% endif %}">
+    {% if msg.role.value == 'user' %}Я{% else %}AI{% endif %}
+  </div>
+  {% if msg.role.value == 'assistant' %}
+  <div class="text-[13px] text-g-700 leading-relaxed pt-0.5 ai-md ai-md-render min-w-0">{{ msg.content }}</div>
+  {% else %}
+  <div class="text-[13px] text-g-800 leading-relaxed pt-0.5 font-semibold">{{ msg.content }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+<script>
+document.querySelectorAll('.ai-md-render').forEach(el => {
+  if (typeof marked !== 'undefined' && !el.dataset.rendered) { el.innerHTML = marked.parse(el.textContent); el.dataset.rendered = '1'; }
+});
+</script>

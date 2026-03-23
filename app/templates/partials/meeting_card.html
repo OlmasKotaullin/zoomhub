@@ -1,0 +1,76 @@
+<div id="meeting-card-{{ meeting.id }}" class="z-card p-5 group">
+  <a href="/meetings/{{ meeting.id }}" class="block">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex items-start gap-3.5 min-w-0">
+        {% set is_processing = meeting.status.value in ['downloading', 'transcribing', 'summarizing'] %}
+        {% if is_processing %}
+        <!-- Круговой прогресс -->
+        <div class="w-10 h-10 flex-shrink-0 relative progress-ring-mini" data-meeting-id="{{ meeting.id }}">
+          <svg viewBox="0 0 36 36" class="w-10 h-10 -rotate-90">
+            <circle cx="18" cy="18" r="15.5" fill="none" stroke="#eef1f6" stroke-width="3"/>
+            <circle class="progress-circle" cx="18" cy="18" r="15.5" fill="none" stroke="url(#grad-{{ meeting.id }})" stroke-width="3"
+              stroke-dasharray="97.4" stroke-dashoffset="97.4" stroke-linecap="round"/>
+            <defs><linearGradient id="grad-{{ meeting.id }}"><stop offset="0%" stop-color="#0b5cff"/><stop offset="100%" stop-color="#16a34a"/></linearGradient></defs>
+          </svg>
+          <span class="progress-pct absolute inset-0 flex items-center justify-center text-[9px] font-bold text-g-500">0%</span>
+        </div>
+        {% else %}
+        <div class="w-10 h-10 rounded-xl zoom-gradient-light flex items-center justify-center text-base flex-shrink-0">
+          {% if meeting.source.value == 'zoom' %}📹{% else %}🎙️{% endif %}
+        </div>
+        {% endif %}
+        <div class="min-w-0">
+          <h3 class="font-semibold text-[14px] text-g-800 group-hover:text-zoom transition leading-snug">{{ meeting.title }}</h3>
+          <div class="flex items-center gap-2 mt-1 text-[12px] text-g-400">
+            <span>{{ meeting.date.strftime('%d.%m.%Y %H:%M') if meeting.date else '' }}</span>
+            {% if meeting.folder %}<span>·</span><span>{{ meeting.folder.icon }} {{ meeting.folder.name }}</span>
+            {% else %}<span>·</span><span class="text-g-300">Без проекта</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        {% if meeting.summary and meeting.summary.tasks %}
+        <span class="text-[10px] font-semibold text-ai bg-ai-light px-2 py-0.5 rounded-full">{{ meeting.summary.tasks|length }} задач</span>
+        {% endif %}
+        {% include "partials/status_badge.html" %}
+      </div>
+    </div>
+  </a>
+  {% if meeting.summary and meeting.summary.tldr %}
+  <p class="text-[13px] text-g-500 mt-3 line-clamp-2 leading-relaxed" style="margin-left: 3.375rem">{{ meeting.summary.tldr }}</p>
+  {% endif %}
+  {% if meeting.status.value == 'error' and meeting.audio_path %}
+  <div class="mt-3 flex items-center gap-3" style="margin-left: 3.375rem">
+    <p class="text-[12px] text-err/70 flex-1 truncate">{{ meeting.error_message or 'Ошибка' }}</p>
+    <button hx-post="/meetings/{{ meeting.id }}/retry" hx-target="#meeting-card-{{ meeting.id }}" hx-swap="outerHTML"
+      class="z-btn z-btn-primary text-[12px] px-3 py-1.5">Повторить</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if is_processing %}
+<script>
+(function() {
+  const el = document.querySelector('[data-meeting-id="{{ meeting.id }}"]');
+  if (!el) return;
+  const circle = el.querySelector('.progress-circle');
+  const pctEl = el.querySelector('.progress-pct');
+  const total = 97.4;
+
+  function update() {
+    fetch('/meetings/{{ meeting.id }}/progress').then(r => r.json()).then(data => {
+      const offset = total - (total * data.percent / 100);
+      circle.style.strokeDashoffset = offset;
+      circle.style.transition = 'stroke-dashoffset 1s ease';
+      pctEl.textContent = data.percent + '%';
+      if (data.percent < 100 && data.stage !== 'error') {
+        setTimeout(update, 3000);
+      } else if (data.percent >= 100) {
+        setTimeout(() => location.reload(), 2000);
+      }
+    }).catch(() => setTimeout(update, 5000));
+  }
+  update();
+})();
+</script>
+{% endif %}

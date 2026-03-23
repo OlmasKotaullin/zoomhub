@@ -1,0 +1,46 @@
+{% if transcript and transcript.full_text %}
+<div>
+  <div class="flex items-center gap-2 mb-4">
+    <div class="relative flex-1">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-[15px] h-[15px] text-g-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input id="transcriptSearch" type="text" placeholder="Поиск по транскрипту..." oninput="filterTranscript(this.value)"
+        class="z-input w-full bg-g-50 pl-9 pr-3 py-2.5 text-[13px] placeholder-g-400">
+    </div>
+    <button onclick="copyTranscript(this)" class="z-btn z-btn-ghost text-[11px] px-4 py-2.5 whitespace-nowrap">Скопировать</button>
+  </div>
+
+  <div id="transcriptBody" class="z-card p-5 space-y-1">
+    {% if transcript.segments %}
+      {% set ns = namespace(prev_speaker='') %}
+      {% for seg in transcript.segments %}
+      <div class="transcript-seg flex gap-3 py-1 {% if seg.speaker and seg.speaker != ns.prev_speaker %}mt-5 pt-3 border-t border-g-100{% endif %}" data-text="{{ seg.text|lower }}">
+        {% if seg.start is defined %}
+        <span class="text-[11px] text-zoom/40 font-mono w-14 flex-shrink-0 pt-0.5 select-none tabular-nums">{{ '%02d:%02d:%02d' % (seg.start // 3600, (seg.start % 3600) // 60, seg.start % 60) }}</span>
+        {% endif %}
+        <div class="flex-1 min-w-0">
+          {% if seg.speaker and seg.speaker != ns.prev_speaker %}
+          <div class="text-[11px] font-semibold text-zoom mb-1 uppercase tracking-wider">{{ seg.speaker }}</div>
+          {% endif %}
+          <p class="text-[13px] text-g-600 leading-relaxed seg-text">{{ seg.text }}</p>
+        </div>
+      </div>
+      {% set ns.prev_speaker = seg.speaker %}
+      {% endfor %}
+    {% else %}
+      <div id="plainTranscript" class="text-[13px] text-g-600 leading-[1.85] whitespace-pre-wrap">{{ transcript.full_text }}</div>
+    {% endif %}
+  </div>
+  <textarea id="transcriptRaw" class="hidden">{{ transcript.full_text }}</textarea>
+</div>
+<script>
+function filterTranscript(q) {
+  q=q.toLowerCase().trim();
+  const segs=document.querySelectorAll('.transcript-seg'), plain=document.getElementById('plainTranscript');
+  if(plain){if(!q){plain.innerHTML=document.getElementById('transcriptRaw').value;return;}plain.innerHTML=document.getElementById('transcriptRaw').value.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark class="bg-zoom-light text-zoom rounded px-0.5 font-medium">$1</mark>');return;}
+  segs.forEach(s=>{if(!q){s.classList.remove('hidden');const e=s.querySelector('.seg-text');if(e)e.innerHTML=e.textContent;return;}if(s.dataset.text.includes(q)){s.classList.remove('hidden');const e=s.querySelector('.seg-text');if(e)e.innerHTML=e.textContent.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark class="bg-zoom-light text-zoom rounded px-0.5 font-medium">$1</mark>');}else s.classList.add('hidden');});
+}
+function copyTranscript(btn){navigator.clipboard.writeText(document.getElementById('transcriptRaw').value).then(()=>{const o=btn.textContent;btn.textContent='Скопировано ✓';btn.style.color='#16a34a';setTimeout(()=>{btn.textContent=o;btn.style.color='';},2000);});}
+</script>
+{% else %}
+<div class="text-center py-16"><p class="text-g-400 text-sm">Транскрипт ещё не готов</p></div>
+{% endif %}

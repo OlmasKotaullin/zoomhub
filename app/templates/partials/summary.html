@@ -1,0 +1,76 @@
+{% if summary and summary.tldr %}
+<div class="space-y-4">
+  <div class="flex justify-end gap-2">
+    <button onclick="copyTasks(this)" class="z-btn z-btn-ghost text-[11px] px-3 py-1.5">Скопировать задачи</button>
+    <button onclick="exportMarkdown()" class="z-btn z-btn-ghost text-[11px] px-3 py-1.5">Экспорт .md</button>
+  </div>
+
+  <div class="z-card p-5">
+    <h3 class="text-[11px] font-semibold text-zoom uppercase tracking-wider mb-2">Резюме</h3>
+    <p class="text-[14px] text-g-600 leading-relaxed">{{ summary.tldr }}</p>
+  </div>
+
+  {% if summary.tasks %}
+  <div class="z-card p-5">
+    <h3 class="text-[11px] font-semibold text-warn uppercase tracking-wider mb-3">Задачи ({{ summary.tasks|length }})</h3>
+    <div class="space-y-2.5">
+      {% for task in summary.tasks %}
+      <div class="flex items-start gap-3 text-[13px] group">
+        <span class="text-warn/50 mt-0.5">☐</span>
+        <div>
+          <span class="text-g-700 group-hover:text-g-900 transition">{{ task.task }}</span>
+          {% if task.assignee %}<span class="text-g-400 ml-2 text-[12px]">→ {{ task.assignee }}</span>{% endif %}
+          {% if task.deadline %}<span class="text-g-400 ml-2 text-[12px]">до {{ task.deadline }}</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if summary.topics %}
+  <div class="z-card p-5">
+    <h3 class="text-[11px] font-semibold text-ai uppercase tracking-wider mb-3">Темы и решения</h3>
+    <div class="space-y-3">
+      {% for topic in summary.topics %}
+      <div>
+        <h4 class="text-[14px] font-semibold text-g-800">{{ topic.topic }}</h4>
+        <p class="text-[13px] text-g-500 mt-0.5 leading-relaxed">{{ topic.details }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if summary.insights %}
+  <div class="z-card p-5">
+    <h3 class="text-[11px] font-semibold text-ok uppercase tracking-wider mb-3">Инсайты</h3>
+    <ul class="space-y-2">
+      {% for item in summary.insights %}
+      <li class="flex items-start gap-2 text-[13px] text-g-600"><span class="text-ok/50">💡</span>{{ item.insight }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+
+<script id="summaryData" type="application/json">{{ {"tldr": summary.tldr, "tasks": summary.tasks, "topics": summary.topics, "insights": summary.insights} | tojson }}</script>
+<script>
+function copyTasks(btn) {
+  const d=JSON.parse(document.getElementById('summaryData').textContent);
+  if(!d.tasks||!d.tasks.length)return;
+  const t=d.tasks.map(t=>{let l='- [ ] '+t.task;if(t.assignee)l+=' → '+t.assignee;if(t.deadline)l+=' (до '+t.deadline+')';return l;}).join('\n');
+  navigator.clipboard.writeText(t).then(()=>{const o=btn.textContent;btn.textContent='Скопировано ✓';btn.style.color='#16a34a';setTimeout(()=>{btn.textContent=o;btn.style.color='';},2000);});
+}
+function exportMarkdown() {
+  const d=JSON.parse(document.getElementById('summaryData').textContent);
+  let m='# Конспект встречи\n\n## Резюме\n'+d.tldr+'\n\n';
+  if(d.tasks&&d.tasks.length){m+='## Задачи\n';d.tasks.forEach(t=>{m+='- [ ] '+t.task;if(t.assignee)m+=' → '+t.assignee;if(t.deadline)m+=' (до '+t.deadline+')';m+='\n';});m+='\n';}
+  if(d.topics&&d.topics.length){m+='## Темы\n';d.topics.forEach(t=>{m+='### '+t.topic+'\n'+t.details+'\n\n';});}
+  if(d.insights&&d.insights.length){m+='## Инсайты\n';d.insights.forEach(i=>{m+='- '+i.insight+'\n';});}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([m],{type:'text/markdown'}));a.download='meeting-summary.md';a.click();
+}
+</script>
+{% else %}
+<div class="text-center py-16"><p class="text-g-400 text-sm">Конспект ещё не готов</p></div>
+{% endif %}

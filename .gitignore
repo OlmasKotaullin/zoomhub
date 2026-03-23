@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+.env
+*.session
+data/
+.pytest_cache/
+node_modules/
+dist/
+.DS_Store
+ZoomHubApp/ZoomHub
+ZoomHubApp/ZoomHub.app/
+ZoomHubApp/*.dmg
+src-tauri/target/

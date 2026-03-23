@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}{{ meeting.title }} — ZoomHub{% endblock %}
+
+{% block content %}
+<div class="mb-6 anim-up">
+  <a href="/" class="text-g-400 text-[12px] hover:text-zoom transition font-medium">&larr; Назад к встречам</a>
+</div>
+
+<div class="flex items-start justify-between mb-2 anim-up" style="animation-delay:0.04s">
+  <div class="flex-1">
+    <h2 id="meetingTitle" class="text-[22px] font-extrabold tracking-tight cursor-pointer hover:text-zoom transition" onclick="editTitle()">{{ meeting.title }}</h2>
+    <form id="titleForm" class="hidden" hx-patch="/meetings/{{ meeting.id }}" hx-target="#meetingTitle" hx-swap="outerHTML" hx-on::after-request="cancelEditTitle()">
+      <input name="title" value="{{ meeting.title }}" class="z-input text-[22px] font-extrabold bg-g-50 w-full px-3 py-1" autofocus>
+    </form>
+  </div>
+  <div class="flex items-center gap-2 flex-shrink-0 ml-4">
+    {% if meeting.status.value == 'ready' and meeting.transcript %}
+    <button hx-post="/meetings/{{ meeting.id }}/resummarize" hx-swap="none"
+      class="z-btn text-[12px] px-3 py-1.5 text-ai border-[1.5px] border-ai/20 hover:bg-ai-light transition">↻ Пересгенерировать</button>
+    {% endif %}
+    {% if meeting.status.value == 'error' %}
+    <button hx-post="/meetings/{{ meeting.id }}/retry" hx-target="#mainContent"
+      class="z-btn z-btn-primary text-[12px] px-3 py-1.5">Повторить</button>
+    {% endif %}
+    <button hx-delete="/meetings/{{ meeting.id }}" hx-confirm="Удалить?" hx-target="#mainContent"
+      class="text-g-300 text-[12px] hover:text-err transition">Удалить</button>
+  </div>
+</div>
+
+<div class="flex items-center flex-wrap gap-x-3 gap-y-1 mb-6 anim-up" style="animation-delay:0.08s">
+  <span class="text-[12px] text-g-400">{{ meeting.date.strftime('%d.%m.%Y %H:%M') if meeting.date else '' }}</span>
+  <span class="text-g-300">·</span>
+  <span class="text-[12px] text-g-400">{{ meeting.source.value }}</span>
+  <span class="text-g-300">·</span>
+  <div hx-get="/meetings/{{ meeting.id }}/status" hx-trigger="{% if meeting.status.value not in ['ready','error'] %}every 3s{% endif %}" hx-swap="innerHTML">
+    {% include "partials/status_badge.html" %}
+  </div>
+  {% if meeting.transcript %}
+  <span class="text-g-300">·</span>
+  {% set wc = meeting.transcript.full_text.split()|length %}
+  <span class="text-[12px] text-g-400">{{ wc }} слов</span>
+  {% if meeting.summary and meeting.summary.tasks %}
+  <span class="text-g-300">·</span>
+  <span class="text-[12px] font-semibold text-ai">{{ meeting.summary.tasks|length }} задач</span>
+  {% endif %}
+  {% endif %}
+</div>
+
+<!-- Tabs -->
+<div class="border-b border-g-100 mb-6 anim-up" style="animation-delay:0.12s">
+  <nav class="flex gap-6 -mb-px">
+    <button onclick="showTab('summary')" id="tab-summary" class="tab-btn pb-3 text-[13px] font-semibold border-b-2 border-zoom text-zoom">Конспект</button>
+    <button onclick="showTab('transcript')" id="tab-transcript" class="tab-btn pb-3 text-[13px] font-semibold border-b-2 border-transparent text-g-400 hover:text-g-700 transition">Транскрипт</button>
+    <button onclick="showTab('chat')" id="tab-chat" class="tab-btn pb-3 text-[13px] font-semibold border-b-2 border-transparent text-g-400 hover:text-g-700 transition">
+      <span class="ai-shimmer">AI</span>-чат
+    </button>
+  </nav>
+</div>
+
+{% set is_processing = meeting.status.value in ['downloading', 'transcribing', 'summarizing'] %}
+
+{% if is_processing %}
+<!-- Круговой прогресс -->
+<div id="bigProgress" class="text-center py-12 anim-up">
+  <div class="relative inline-block">
+    <svg viewBox="0 0 120 120" class="w-32 h-32 -rotate-90">
+      <circle cx="60" cy="60" r="52" fill="none" stroke="#eef1f6" stroke-width="8"/>
+      <circle id="bigCircle" cx="60" cy="60" r="52" fill="none" stroke="url(#bigGrad)" stroke-width="8"
+        stroke-dasharray="326.7" stroke-dashoffset="326.7" stroke-linecap="round"/>
+      <defs><linearGradient id="bigGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#0b5cff"/><stop offset="100%" stop-color="#16a34a"/></linearGradient></defs>
+    </svg>
+    <span id="bigPct" class="absolute inset-0 flex items-center justify-center text-2xl font-extrabold text-g-700 rotate-0">0%</span>
+  </div>
+  <p id="bigLabel" class="text-g-400 text-sm mt-4 font-medium"></p>
+  <p class="text-g-300 text-[11px] mt-1">Этап обработки</p>
+</div>
+
+<script>
+(function() {
+  const circle = document.getElementById('bigCircle');
+  const pctEl = document.getElementById('bigPct');
+  const labelEl = document.getElementById('bigLabel');
+  const total = 326.7;
+
+  function update() {
+    fetch('/meetings/{{ meeting.id }}/progress').then(r => r.json()).then(data => {
+      const offset = total - (total * data.percent / 100);
+      circle.style.strokeDashoffset = offset;
+      circle.style.transition = 'stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1)';
+      pctEl.textContent = data.percent + '%';
+      labelEl.textContent = data.label;
+      if (data.percent < 100 && data.stage !== 'error') {
+        setTimeout(update, 3000);
+      } else if (data.percent >= 100) {
+        setTimeout(() => location.reload(), 2000);
+      }
+    }).catch(() => setTimeout(update, 5000));
+  }
+  update();
+})();
+</script>
+{% endif %}
+
+<div id="panel-summary" class="tab-panel {% if is_processing %}hidden{% endif %}">
+  <div hx-get="/meetings/{{ meeting.id }}/summary" hx-trigger="load" hx-swap="innerHTML">
+    <div class="text-g-400 text-sm">Загрузка...</div>
+  </div>
+</div>
+
+<div id="panel-transcript" class="tab-panel hidden">
+  <div hx-get="/meetings/{{ meeting.id }}/transcript" hx-trigger="load" hx-swap="innerHTML">
+    <div class="text-g-400 text-sm">Загрузка...</div>
+  </div>
+</div>
+
+<div id="panel-chat" class="tab-panel hidden">
+  <div class="z-card p-5">
+    <div id="meetingChatMessages" class="max-h-[500px] overflow-y-auto mb-4 space-y-3"
+      hx-get="/meetings/{{ meeting.id }}/chat/history" hx-trigger="load" hx-swap="innerHTML"></div>
+
+    <div id="suggestedPrompts" class="flex flex-wrap gap-2 mb-4">
+      <button onclick="askSuggested('Какие ключевые решения были приняты?')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">Ключевые решения</button>
+      <button onclick="askSuggested('Составь план действий')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">План действий</button>
+      <button onclick="askSuggested('Кто за что отвечает?')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">Ответственные</button>
+      <button onclick="askSuggested('Резюме в 3 предложения')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">Короткое резюме</button>
+    </div>
+
+    <div id="chatTyping" class="htmx-indicator flex gap-3 zoom-gradient-light rounded-xl px-4 py-3 mb-3">
+      <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 bg-ai/15 text-ai">AI</div>
+      <div class="text-sm text-g-500 pt-1">AI Companion думает<span class="animate-pulse">...</span></div>
+    </div>
+
+    <form id="chatForm" hx-post="/meetings/{{ meeting.id }}/chat" hx-target="#meetingChatMessages" hx-swap="beforeend"
+      hx-indicator="#chatTyping" hx-on::after-request="onChatDone()" class="flex gap-2">
+      <input id="chatInput" name="message" placeholder="Задай вопрос по встрече..." required
+        class="z-input flex-1 bg-g-50 px-3.5 py-2.5 text-[13px] placeholder-g-400">
+      <button type="submit" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Отправить</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('border-zoom','text-zoom'); b.classList.add('border-transparent','text-g-400'); });
+  document.getElementById('panel-'+name).classList.remove('hidden');
+  const btn = document.getElementById('tab-'+name);
+  btn.classList.add('border-zoom','text-zoom'); btn.classList.remove('border-transparent','text-g-400');
+}
+function editTitle() { document.getElementById('meetingTitle').classList.add('hidden'); document.getElementById('titleForm').classList.remove('hidden'); document.querySelector('#titleForm input').focus(); }
+function cancelEditTitle() { document.getElementById('meetingTitle').classList.remove('hidden'); document.getElementById('titleForm').classList.add('hidden'); }
+function askSuggested(t) { document.getElementById('chatInput').value=t; document.getElementById('suggestedPrompts').classList.add('hidden'); htmx.trigger('#chatForm','submit'); }
+function onChatDone() { document.getElementById('suggestedPrompts').classList.add('hidden'); document.getElementById('chatInput').value=''; const el=document.getElementById('meetingChatMessages'); el.scrollTop=el.scrollHeight; }
+</script>
+{% endblock %}

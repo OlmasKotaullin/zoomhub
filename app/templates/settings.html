@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Настройки — ZoomHub{% endblock %}
+
+{% block content %}
+<div class="mb-8 anim-up">
+  <h2 class="text-[22px] font-extrabold tracking-tight">Настройки</h2>
+  <p class="text-g-400 text-[13px] mt-0.5">Провайдеры и интеграции</p>
+</div>
+
+<div class="space-y-4 max-w-2xl">
+
+  <!-- LLM-провайдер -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.04s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">🧠 LLM-провайдер</h3>
+      {% if llm_ok %}<span class="text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">Работает</span>
+      {% else %}<span class="text-[11px] font-semibold text-err bg-err/10 px-2.5 py-1 rounded-full">Не доступен</span>{% endif %}
+    </div>
+    <p class="text-[13px] text-g-500 mb-3">Используется для саммари встреч и AI-чата.</p>
+    <div class="flex gap-2 mb-3">
+      <button onclick="switchLLM('auto')" id="btn-llm-auto"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if llm_provider == 'auto' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        ⚡ Авто <span class="text-[10px] opacity-70">(рекомендуется)</span>
+      </button>
+      <button onclick="switchLLM('ollama')" id="btn-llm-ollama"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if llm_provider == 'ollama' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        🦙 Ollama
+      </button>
+      <button onclick="switchLLM('claude')" id="btn-llm-claude"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if llm_provider == 'claude' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        🤖 Claude
+      </button>
+    </div>
+    <div class="text-[12px] text-g-400">
+      {% if llm_provider == 'auto' %}
+        <p>Короткие встречи → <strong class="text-g-600">Qwen 2.5:7b</strong> (бесплатно). Длинные → <strong class="text-g-600">Claude</strong> (точнее).</p>
+        <p class="mt-1">Порог: 10 000 символов транскрипта</p>
+      {% elif llm_provider == 'ollama' %}
+        <p>Модель: <strong class="text-g-600">{{ ollama_model }}</strong> — бесплатно, офлайн, ~5 ГБ RAM</p>
+        <p class="mt-1">Установка: <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">brew install ollama && ollama pull {{ ollama_model }}</code></p>
+      {% else %}
+        <p>Модель: <strong class="text-g-600">Claude Sonnet</strong> — лучшее качество, весь контекст</p>
+        {% if not claude_ok %}<p class="mt-1 text-err/70">Добавьте <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">ANTHROPIC_API_KEY</code> в .env</p>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Транскрипция-провайдер -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.08s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">🎙️ Транскрипция</h3>
+      {% if transcription_ok %}<span class="text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">Работает</span>
+      {% else %}<span class="text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">Не доступен</span>{% endif %}
+    </div>
+    <p class="text-[13px] text-g-500 mb-3">Преобразование аудио в текст.</p>
+    <div class="flex gap-2 mb-3">
+      <button onclick="switchTranscription('whisper')" id="btn-trans-whisper"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if transcription_provider == 'whisper' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        🔊 Whisper <span class="text-[10px] opacity-70">(локальный)</span>
+      </button>
+      <button onclick="switchTranscription('bukvitsa')" id="btn-trans-bukvitsa"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if transcription_provider == 'bukvitsa' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        💬 Буквица <span class="text-[10px] opacity-70">(облако)</span>
+      </button>
+    </div>
+    <div class="text-[12px] text-g-400">
+      {% if transcription_provider == 'whisper' %}
+        <p>Модель: <strong class="text-g-600">{{ whisper_model }}</strong> — бесплатно, офлайн, ~10 мин на 1ч аудио</p>
+        <p class="mt-1">Уже установлен. Качество русского: хорошее.</p>
+      {% else %}
+        <p>Бот: <strong class="text-g-600">@{{ bukvitsa_username }}</strong> — безлимит 600₽/мес</p>
+        {% if not telegram_ok %}<p class="mt-1 text-warn">Запустите: <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">python setup_telegram.py</code></p>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Zoom -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.12s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">📹 Zoom</h3>
+      {% if zoom_ok %}<span class="text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">Подключён</span>
+      {% else %}<span class="text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">Не настроен</span>{% endif %}
+    </div>
+    {% if zoom_ok %}<p class="text-[13px] text-g-500">Polling каждые 2 мин. Новые записи обрабатываются автоматически.</p>
+    {% else %}<p class="text-[13px] text-g-500 mb-3">Server-to-Server OAuth нужен для авто-скачивания.</p>
+    <ol class="text-[13px] text-g-400 space-y-1.5 list-decimal list-inside">
+      <li>marketplace.zoom.us → Develop → Build App</li>
+      <li>Server-to-Server OAuth, <code class="text-zoom text-[12px] font-mono bg-zoom-light px-1.5 py-0.5 rounded">recording:read:admin</code></li>
+      <li>Скопируй ключи в <code class="text-zoom text-[12px] font-mono bg-zoom-light px-1.5 py-0.5 rounded">.env</code></li>
+    </ol>{% endif %}
+  </div>
+
+</div>
+
+<script>
+function switchLLM(provider) {
+  fetch('/settings/llm-provider', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'provider=' + provider
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'ok') location.reload();
+  });
+}
+
+function switchTranscription(provider) {
+  fetch('/settings/transcription-provider', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'provider=' + provider
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'ok') location.reload();
+  });
+}
+</script>
+{% endblock %}

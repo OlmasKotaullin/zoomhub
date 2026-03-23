@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ZoomHub{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            zoom: { DEFAULT: '#0b5cff', hover: '#0047d4', light: '#e8f0fe', surface: '#f7f9fc' },
+            ai: { DEFAULT: '#6e56cf', light: '#ede9f8', gradient: '#4d3aad' },
+            g: { 50: '#f7f9fc', 100: '#eef1f6', 200: '#dde3ed', 300: '#c3cbd9', 400: '#8f9bb3', 500: '#6b7a94', 600: '#4a5568', 700: '#374151', 800: '#232b3a', 900: '#131820' },
+            ok: '#16a34a', warn: '#f59e0b', err: '#dc2626',
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          borderRadius: { '2xl': '16px', '3xl': '20px' },
+          boxShadow: {
+            card: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+            'card-hover': '0 4px 16px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04)',
+            modal: '0 20px 60px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #dde3ed; border-radius: 3px; }
+
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-flex; }
+    .htmx-request.htmx-indicator { display: inline-flex; }
+
+    .drop-zone { transition: all 0.2s; }
+    .drop-zone.dragover { border-color: #0b5cff; background: #e8f0fe; }
+
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes slideRight { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:translateX(0); } }
+    .anim-up { animation: fadeUp 0.35s cubic-bezier(0.16,1,0.3,1) both; }
+    .anim-slide { animation: slideRight 0.3s ease both; }
+
+    /* Zoom gradient */
+    .zoom-gradient { background: linear-gradient(135deg, #0b5cff 0%, #6e56cf 100%); }
+    .zoom-gradient-light { background: linear-gradient(135deg, #e8f0fe 0%, #ede9f8 100%); }
+
+    /* Cards */
+    .z-card { background: white; border-radius: 16px; border: 1px solid #eef1f6; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
+    .z-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); border-color: #dde3ed; }
+
+    /* AI badge shimmer */
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .ai-shimmer { background: linear-gradient(90deg, #6e56cf 0%, #0b5cff 50%, #6e56cf 100%); background-size: 200% 100%; animation: shimmer 3s ease infinite; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* Input focus ring */
+    .z-input { border: 1.5px solid #eef1f6; border-radius: 12px; transition: all 0.15s; }
+    .z-input:focus { border-color: #0b5cff; box-shadow: 0 0 0 3px rgba(11,92,255,0.1); outline: none; }
+
+    /* Button styles */
+    .z-btn { font-weight: 600; border-radius: 10px; transition: all 0.15s; }
+    .z-btn-primary { background: #0b5cff; color: white; }
+    .z-btn-primary:hover { background: #0047d4; box-shadow: 0 2px 8px rgba(11,92,255,0.25); }
+    .z-btn-ghost { background: transparent; color: #6b7a94; border: 1.5px solid #eef1f6; }
+    .z-btn-ghost:hover { background: #f7f9fc; border-color: #dde3ed; color: #374151; }
+
+    /* AI markdown */
+    .ai-md h1,.ai-md h2,.ai-md h3 { font-weight:700; margin:0.5em 0 0.25em; color:#232b3a; }
+    .ai-md h1 { font-size:1.1em; } .ai-md h2 { font-size:1.05em; } .ai-md h3 { font-size:0.95em; }
+    .ai-md ul,.ai-md ol { padding-left:1.2em; margin:0.3em 0; }
+    .ai-md li { margin:0.15em 0; }
+    .ai-md ul li { list-style:disc; } .ai-md ol li { list-style:decimal; }
+    .ai-md p { margin:0.3em 0; }
+    .ai-md strong { color:#232b3a; }
+    .ai-md code { background:#f0f0f5; padding:0.15em 0.35em; border-radius:5px; font-size:0.87em; color:#6e56cf; font-family: 'SF Mono', Monaco, monospace; }
+    .ai-md pre { background:#f7f9fc; border:1.5px solid #eef1f6; padding:0.7em; border-radius:12px; overflow-x:auto; }
+    .ai-md blockquote { border-left:3px solid #0b5cff; padding-left:0.8em; color:#6b7a94; }
+
+    ::selection { background: #c5d8ff; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-zoom-surface text-g-800 min-h-screen">
+  {% block body %}
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside class="w-[260px] bg-white border-r border-g-100 flex flex-col">
+      <!-- Logo -->
+      <div class="px-5 pt-5 pb-3">
+        <h1 class="text-[22px] font-extrabold tracking-tight leading-none">
+          <span class="text-zoom">zoom</span><span class="text-g-900">Hub</span>
+        </h1>
+        <p class="text-[11px] text-g-400 mt-1.5 font-medium flex items-center gap-1.5">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-ok animate-pulse"></span>
+          AI Companion
+        </p>
+      </div>
+
+      <!-- Search -->
+      <div class="px-3 pb-2">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-[15px] h-[15px] text-g-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input type="search" name="q" placeholder="Поиск встреч..."
+            hx-get="/meetings/search" hx-trigger="keyup changed delay:300ms" hx-target="#mainContent"
+            class="z-input w-full bg-g-50 pl-9 pr-3 py-2 text-[13px] placeholder-g-400">
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <div class="flex-1 overflow-y-auto px-2 pt-2">
+        <a href="/" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-g-600 hover:bg-g-50 font-medium transition mb-2">
+          <svg class="w-4 h-4 text-g-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
+          Все встречи
+        </a>
+
+        <div class="px-2 pb-1 flex items-center justify-between">
+          <span class="text-[11px] font-semibold text-g-400 uppercase tracking-wider">Папки</span>
+          <button onclick="document.getElementById('newFolderForm').classList.toggle('hidden')"
+            class="text-zoom text-sm font-bold w-5 h-5 flex items-center justify-center rounded-md hover:bg-zoom-light transition">+</button>
+        </div>
+
+        <form id="newFolderForm" class="hidden px-2 pb-3 space-y-1.5"
+          hx-post="/folders" hx-target="#folderList" hx-swap="innerHTML"
+          hx-on::after-request="this.reset(); this.classList.add('hidden')">
+          <div class="flex gap-1.5">
+            <input name="icon" value="📁" class="w-9 bg-g-50 border border-g-200 rounded-lg text-center text-sm py-1.5">
+            <input name="name" placeholder="Название проекта" required class="z-input flex-1 bg-g-50 px-2.5 py-1.5 text-sm placeholder-g-400">
+          </div>
+          <input name="keywords" placeholder="Ключевые слова: bimokna, бим, окна пвх" class="z-input w-full bg-g-50 px-2.5 py-1.5 text-[11px] placeholder-g-400">
+          <button type="submit" class="z-btn z-btn-primary w-full text-xs py-1.5">Создать</button>
+        </form>
+
+        <div id="folderList">
+          {% block folder_list %}{% include "partials/folder_list.html" %}{% endblock %}
+        </div>
+      </div>
+
+      <!-- Буквица usage -->
+      <div class="px-3 pb-2" id="bukvitsaWidget">
+        <div class="bg-g-50 rounded-xl p-3">
+          <div class="flex items-center gap-3">
+            <div class="relative flex-shrink-0">
+              <svg viewBox="0 0 36 36" class="w-11 h-11 -rotate-90">
+                <circle cx="18" cy="18" r="15" fill="none" stroke="#eef1f6" stroke-width="2.5"/>
+                <circle id="bkvCircle" cx="18" cy="18" r="15" fill="none" stroke="url(#bkvGrad)" stroke-width="2.5"
+                  stroke-dasharray="94.2" stroke-dashoffset="94.2" stroke-linecap="round"/>
+                <defs><linearGradient id="bkvGrad"><stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#4ade80"/></linearGradient></defs>
+              </svg>
+              <span id="bkvPct" class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-g-500">0%</span>
+            </div>
+            <div class="min-w-0">
+              <p class="text-[11px] font-semibold text-g-700">Буквица</p>
+              <p id="bkvHours" class="text-[10px] text-g-400">— / 30 ч</p>
+              <p id="bkvLeft" class="text-[10px] text-ok font-medium">30 ч осталось</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+      (function() {
+        fetch('/api/bukvitsa-usage').then(r => r.json()).then(d => {
+          const total = 94.2;
+          const offset = total - (total * d.percent / 100);
+          document.getElementById('bkvCircle').style.cssText = 'stroke-dashoffset:'+offset+';transition:stroke-dashoffset 1s ease';
+          document.getElementById('bkvPct').textContent = d.percent + '%';
+          document.getElementById('bkvHours').textContent = d.used_hours.toFixed(1) + ' / ' + d.limit_hours + ' ч';
+          document.getElementById('bkvLeft').textContent = d.left_hours.toFixed(1) + ' ч осталось';
+          if (d.percent > 80) {
+            document.getElementById('bkvLeft').className = 'text-[10px] text-warn font-medium';
+            document.querySelector('#bkvGrad stop').setAttribute('stop-color', '#f59e0b');
+            document.querySelector('#bkvGrad stop:last-child').setAttribute('stop-color', '#fbbf24');
+          }
+        }).catch(() => {});
+      })();
+      </script>
+
+      <!-- Action buttons -->
+      <div class="p-3 space-y-2">
+        <button onclick="document.getElementById('uploadModal').classList.remove('hidden')"
+          class="z-btn z-btn-primary w-full py-2.5 text-[13px] flex items-center justify-center gap-2 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Загрузить запись
+        </button>
+        <button onclick="document.getElementById('textModal').classList.remove('hidden')"
+          class="z-btn z-btn-ghost w-full py-2.5 text-[13px] flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Вставить текст
+        </button>
+        <a href="/settings" class="block text-center text-g-400 text-[11px] py-1 hover:text-g-600 transition font-medium">Настройки</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 overflow-y-auto relative">
+      <div id="mainContent" class="max-w-[860px] mx-auto px-8 py-8">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+    <!-- AI Chat Button (fixed) -->
+    <button id="chatToggle" onclick="toggleChat()"
+      class="fixed bottom-6 right-6 w-12 h-12 bg-zoom rounded-full shadow-lg shadow-zoom/25 flex items-center justify-center hover:bg-zoom-hover transition-all z-40 hover:scale-105">
+      <svg id="chatIconOpen" class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <svg id="chatIconClose" class="w-5 h-5 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+
+    <!-- AI Chat Panel (slide-in from right) -->
+    <div id="chatPanel" class="fixed top-0 right-0 h-full w-[380px] bg-white border-l border-g-100 shadow-2xl translate-x-full transition-transform duration-300 ease-out z-30 flex flex-col">
+      <!-- Header -->
+      <div class="px-5 py-4 border-b border-g-100 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-zoom/10 flex items-center justify-center">
+            <svg class="w-4 h-4 text-zoom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          </div>
+          <div>
+            <p class="text-[13px] font-bold text-g-800">AI Companion</p>
+            <p id="chatContext" class="text-[10px] text-g-400">Общий чат</p>
+          </div>
+        </div>
+        <button onclick="toggleChat()" class="text-g-300 hover:text-g-500 transition">&times;</button>
+      </div>
+
+      <!-- Messages -->
+      <div id="globalChatMessages" class="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <!-- Suggested prompts (shown when empty) -->
+        <div id="globalSuggestions" class="pt-8">
+          <p class="text-center text-g-300 text-[12px] mb-6">Задайте вопрос по встрече</p>
+          <div class="space-y-2">
+            <button onclick="sendSuggested('Какие ключевые решения?')" class="w-full text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">Ключевые решения</button>
+            <button onclick="sendSuggested('Составь план действий')" class="w-full text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">План действий</button>
+            <button onclick="sendSuggested('Кто за что отвечает?')" class="w-full text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">Ответственные</button>
+            <button onclick="sendSuggested('Резюме в 3 предложения')" class="w-full text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">Короткое резюме</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typing indicator -->
+      <div id="globalTyping" class="hidden px-4 py-2">
+        <div class="flex gap-2 items-center text-[12px] text-g-400">
+          <div class="flex gap-0.5"><span class="w-1.5 h-1.5 bg-zoom/40 rounded-full animate-bounce" style="animation-delay:0ms"></span><span class="w-1.5 h-1.5 bg-zoom/40 rounded-full animate-bounce" style="animation-delay:150ms"></span><span class="w-1.5 h-1.5 bg-zoom/40 rounded-full animate-bounce" style="animation-delay:300ms"></span></div>
+          AI думает...
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="px-4 py-3 border-t border-g-100">
+        <div class="flex gap-2">
+          <input id="globalChatInput" placeholder="Спросите что-нибудь..."
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage()}"
+            class="z-input flex-1 bg-g-50 px-3 py-2.5 text-[13px] placeholder-g-400">
+          <button onclick="sendChatMessage()"
+            class="w-9 h-9 bg-zoom rounded-lg flex items-center justify-center hover:bg-zoom-hover transition flex-shrink-0">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Chat panel state
+  let chatOpen = false;
+  let currentMeetingId = null;
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+    const panel = document.getElementById('chatPanel');
+    const iconOpen = document.getElementById('chatIconOpen');
+    const iconClose = document.getElementById('chatIconClose');
+
+    if (chatOpen) {
+      panel.classList.remove('translate-x-full');
+      iconOpen.classList.add('hidden');
+      iconClose.classList.remove('hidden');
+      detectMeetingContext();
+      document.getElementById('globalChatInput').focus();
+    } else {
+      panel.classList.add('translate-x-full');
+      iconOpen.classList.remove('hidden');
+      iconClose.classList.add('hidden');
+    }
+  }
+
+  function detectMeetingContext() {
+    const match = window.location.pathname.match(/\/meetings\/(\d+)/);
+    if (match) {
+      currentMeetingId = match[1];
+      document.getElementById('chatContext').textContent = document.querySelector('h2')?.textContent || 'Встреча #' + currentMeetingId;
+      loadChatHistory();
+    } else {
+      currentMeetingId = null;
+      document.getElementById('chatContext').textContent = 'Общий чат';
+    }
+  }
+
+  function loadChatHistory() {
+    if (!currentMeetingId) return;
+    fetch('/meetings/' + currentMeetingId + '/chat/history')
+      .then(r => r.text())
+      .then(html => {
+        if (html.trim()) {
+          document.getElementById('globalChatMessages').innerHTML = html;
+          document.getElementById('globalSuggestions')?.remove();
+          scrollChat();
+        }
+      });
+  }
+
+  function sendSuggested(text) {
+    document.getElementById('globalChatInput').value = text;
+    sendChatMessage();
+  }
+
+  function sendChatMessage() {
+    const input = document.getElementById('globalChatInput');
+    const msg = input.value.trim();
+    if (!msg || !currentMeetingId) return;
+
+    // Show user message immediately
+    const container = document.getElementById('globalChatMessages');
+    document.getElementById('globalSuggestions')?.remove();
+
+    container.insertAdjacentHTML('beforeend',
+      '<div class="flex gap-2.5"><div class="w-6 h-6 rounded-full bg-g-100 flex items-center justify-center text-[9px] font-bold text-g-500 flex-shrink-0">Я</div><div class="text-[13px] text-g-800 font-medium pt-0.5">' + msg.replace(/</g,'&lt;') + '</div></div>'
+    );
+    input.value = '';
+    scrollChat();
+
+    // Show typing
+    document.getElementById('globalTyping').classList.remove('hidden');
+
+    // Send to server
+    const formData = new FormData();
+    formData.append('message', msg);
+
+    fetch('/meetings/' + currentMeetingId + '/chat', { method: 'POST', body: formData })
+      .then(r => r.text())
+      .then(html => {
+        document.getElementById('globalTyping').classList.add('hidden');
+        // Extract only AI response (skip user msg — already shown)
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const msgs = temp.querySelectorAll(':scope > div');
+        if (msgs.length > 1) {
+          container.appendChild(msgs[1]); // AI response
+        } else if (msgs.length === 1) {
+          container.appendChild(msgs[0]);
+        }
+        // Render markdown
+        container.querySelectorAll('.ai-md-render').forEach(el => {
+          if (typeof marked !== 'undefined' && !el.dataset.rendered) {
+            el.innerHTML = marked.parse(el.textContent);
+            el.dataset.rendered = '1';
+          }
+        });
+        scrollChat();
+      })
+      .catch(() => {
+        document.getElementById('globalTyping').classList.add('hidden');
+        container.insertAdjacentHTML('beforeend',
+          '<div class="text-[12px] text-err px-2 py-1">Ошибка отправки</div>'
+        );
+      });
+  }
+
+  function scrollChat() {
+    const el = document.getElementById('globalChatMessages');
+    el.scrollTop = el.scrollHeight;
+  }
+  </script>
+
+  <!-- Upload Modal -->
+  <div id="uploadModal" class="hidden fixed inset-0 bg-g-900/30 backdrop-blur-[2px] flex items-center justify-center z-50">
+    <div class="bg-white rounded-3xl p-7 w-full max-w-lg shadow-modal anim-up">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-bold">Загрузить запись</h2>
+        <button onclick="document.getElementById('uploadModal').classList.add('hidden')" class="text-g-400 hover:text-g-700 text-xl transition">&times;</button>
+      </div>
+      <form hx-post="/meetings/upload" hx-target="#mainContent" hx-encoding="multipart/form-data"
+        hx-on::after-request="document.getElementById('uploadModal').classList.add('hidden')">
+        <div id="dropZone" class="drop-zone border-2 border-dashed border-g-200 rounded-2xl p-10 text-center mb-4 cursor-pointer hover:border-zoom/40"
+          onclick="document.getElementById('fileInput').click()">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-2xl zoom-gradient-light flex items-center justify-center">
+            <svg class="w-6 h-6 text-zoom" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+          </div>
+          <p class="text-g-600 text-sm font-medium">Перетащи файл или нажми для выбора</p>
+          <p class="text-g-400 text-xs mt-1.5">MP4, MP3, WAV, M4A, WebM — до 2 ГБ</p>
+          <input id="fileInput" type="file" name="file" accept=".mp4,.mp3,.wav,.m4a,.webm,.ogg" class="hidden" required>
+        </div>
+        <input name="title" placeholder="Название встречи (необязательно)" class="z-input w-full bg-g-50 px-3.5 py-2.5 text-sm placeholder-g-400 mb-3">
+        <select name="folder_id" class="z-input w-full bg-g-50 px-3.5 py-2.5 text-sm mb-4">
+          <option value="">Без папки</option>
+          {% for folder in folders %}<option value="{{ folder.id }}">{{ folder.icon }} {{ folder.name }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="z-btn z-btn-primary w-full py-3 text-sm">Загрузить и обработать</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Text Modal -->
+  <div id="textModal" class="hidden fixed inset-0 bg-g-900/30 backdrop-blur-[2px] flex items-center justify-center z-50">
+    <div class="bg-white rounded-3xl p-7 w-full max-w-2xl shadow-modal anim-up">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-bold">Добавить из текста</h2>
+        <button onclick="document.getElementById('textModal').classList.add('hidden')" class="text-g-400 hover:text-g-700 text-xl transition">&times;</button>
+      </div>
+      <p class="text-g-400 text-xs mb-4">Вставь расшифровку из Буквицы. AI Companion автоматически сделает конспект.</p>
+      <form hx-post="/meetings/add-text" hx-target="#mainContent"
+        hx-on::after-request="document.getElementById('textModal').classList.add('hidden'); this.reset();">
+        <input name="title" placeholder="Название встречи" required class="z-input w-full bg-g-50 px-3.5 py-2.5 text-sm placeholder-g-400 mb-3">
+        <textarea name="transcript_text" rows="10" required placeholder="Вставь текст транскрипта..."
+          class="z-input w-full bg-g-50 px-4 py-3 text-sm placeholder-g-400 mb-3 resize-y leading-relaxed"></textarea>
+        <select name="folder_id" class="z-input w-full bg-g-50 px-3.5 py-2.5 text-sm mb-4">
+          <option value="">Без папки</option>
+          {% for folder in folders %}<option value="{{ folder.id }}">{{ folder.icon }} {{ folder.name }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="z-btn z-btn-primary w-full py-3 text-sm">Сохранить и обработать</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    if (dropZone) {
+      ['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('dragover'); }));
+      ['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove('dragover'); }));
+      dropZone.addEventListener('drop', ev => { fileInput.files = ev.dataTransfer.files; });
+      fileInput.addEventListener('change', () => { if (fileInput.files.length) { dropZone.querySelector('p').textContent = fileInput.files[0].name; dropZone.classList.add('border-zoom/40','bg-zoom-light'); } });
+    }
+  </script>
+  {% endblock %}
+</body>
+</html>

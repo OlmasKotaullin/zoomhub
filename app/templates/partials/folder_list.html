@@ -1,0 +1,19 @@
+<nav class="space-y-0.5 px-1">
+  {% for folder in folders %}
+  <a href="/folders/{{ folder.id }}"
+    class="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] hover:bg-g-50 group transition">
+    <span class="flex items-center gap-2.5">
+      <span>{{ folder.icon }}</span>
+      <span class="text-g-600 group-hover:text-g-800 font-medium transition">{{ folder.name }}</span>
+    </span>
+    <span class="flex items-center gap-2">
+      <span class="text-[11px] text-g-400 font-medium">{{ folder.meetings|length }}</span>
+      <button hx-delete="/folders/{{ folder.id }}" hx-target="#folderList" hx-swap="innerHTML"
+        hx-confirm="Удалить папку {{ folder.name }}?"
+        class="hidden group-hover:block text-g-300 hover:text-err text-xs transition"
+        onclick="event.preventDefault(); event.stopPropagation();">&times;</button>
+    </span>
+  </a>
+  {% endfor %}
+  {% if not folders %}<p class="text-g-400 text-[12px] px-3 py-4 text-center">Нет папок</p>{% endif %}
+</nav>

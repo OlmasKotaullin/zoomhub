@@ -1,0 +1,22 @@
+{% set status = meeting.status.value %}
+{% if status == 'downloading' %}
+<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">
+  <span class="w-1.5 h-1.5 bg-warn rounded-full animate-pulse"></span>Скачивание
+</span>
+{% elif status == 'transcribing' %}
+<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zoom bg-zoom-light px-2.5 py-1 rounded-full">
+  <span class="w-1.5 h-1.5 bg-zoom rounded-full animate-pulse"></span>Транскрипция
+</span>
+{% elif status == 'summarizing' %}
+<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ai bg-ai-light px-2.5 py-1 rounded-full">
+  <span class="w-1.5 h-1.5 bg-ai rounded-full animate-pulse"></span>AI Companion
+</span>
+{% elif status == 'ready' %}
+<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">
+  <span class="w-1.5 h-1.5 bg-ok rounded-full"></span>Готово
+</span>
+{% elif status == 'error' %}
+<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-err bg-err/10 px-2.5 py-1 rounded-full" title="{{ meeting.error_message or '' }}">
+  <span class="w-1.5 h-1.5 bg-err rounded-full"></span>Ошибка
+</span>
+{% endif %}

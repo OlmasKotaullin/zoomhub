@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}ZoomHub — Главная{% endblock %}
+
+{% block content %}
+<div class="anim-up">
+  <h2 class="text-[22px] font-extrabold tracking-tight">Встречи</h2>
+  <p class="text-g-400 text-[13px] mt-0.5">Записи, транскрипты и AI-конспекты</p>
+</div>
+
+<div class="flex gap-2 mt-6 mb-6 anim-up" style="animation-delay:0.05s" id="statusFilters">
+  <button onclick="filterBy('all', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-primary rounded-full">Все</button>
+  <button onclick="filterBy('ready', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-ghost rounded-full">Готовые</button>
+  <button onclick="filterBy('transcribing', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-ghost rounded-full">В обработке</button>
+  <button onclick="filterBy('error', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-ghost rounded-full">С ошибками</button>
+</div>
+
+<div id="meetingsList">
+{% if recent_meetings %}
+<div class="space-y-3">
+  {% for meeting in recent_meetings %}
+    <div class="anim-up" style="animation-delay: {{ loop.index * 0.04 }}s">{% include "partials/meeting_card.html" %}</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-20 anim-up">
+  <div class="w-16 h-16 mx-auto mb-5 rounded-2xl zoom-gradient-light flex items-center justify-center"><span class="text-2xl">🎙️</span></div>
+  <h3 class="text-lg font-bold mb-1.5">Пока нет встреч</h3>
+  <p class="text-g-400 text-sm mb-6">Загрузи запись или подключи Zoom</p>
+  <button onclick="document.getElementById('uploadModal').classList.remove('hidden')" class="z-btn z-btn-primary py-2.5 px-6 text-sm">Загрузить первую запись</button>
+</div>
+{% endif %}
+</div>
+
+<script>
+function filterBy(status, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => { b.className = 'filter-btn z-btn text-[12px] px-4 py-2 z-btn-ghost rounded-full'; });
+  btn.className = 'filter-btn z-btn text-[12px] px-4 py-2 z-btn-primary rounded-full';
+  htmx.ajax('GET', '/meetings/filter?status=' + status, {target: '#meetingsList', swap: 'innerHTML'});
+}
+</script>
+{% endblock %}

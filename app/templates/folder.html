@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ folder.icon }} {{ folder.name }} — ZoomHub{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6 anim-up">
+  <div>
+    <h2 class="text-[22px] font-extrabold tracking-tight">{{ folder.icon }} {{ folder.name }}</h2>
+    <p class="text-g-400 text-[13px] mt-0.5">{{ meetings|length }} встреч</p>
+  </div>
+  <button onclick="document.getElementById('folderChat').classList.toggle('hidden')"
+    class="z-btn z-btn-ghost text-[13px] px-4 py-2.5">💬 AI-чат по папке</button>
+</div>
+
+<div id="folderChat" class="hidden mb-6 z-card p-5 anim-up">
+  <div id="folderChatMessages" class="max-h-72 overflow-y-auto mb-3 space-y-3"></div>
+  <form hx-post="/folders/{{ folder.id }}/chat" hx-target="#folderChatMessages" hx-swap="beforeend" hx-on::after-request="this.reset()" class="flex gap-2">
+    <input name="message" placeholder="Задай вопрос по всем встречам..." required class="z-input flex-1 bg-g-50 px-3.5 py-2.5 text-[13px] placeholder-g-400">
+    <button type="submit" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Отправить</button>
+  </form>
+</div>
+
+{% if meetings %}
+<div class="space-y-3">
+  {% for meeting in meetings %}<div class="anim-up" style="animation-delay:{{ loop.index*0.04 }}s">{% include "partials/meeting_card.html" %}</div>{% endfor %}
+</div>
+{% else %}
+<div class="text-center py-16"><p class="text-g-400 text-sm">В этой папке пока нет встреч</p></div>
+{% endif %}
+{% endblock %}
