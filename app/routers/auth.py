@@ -2,7 +2,7 @@
 
 import secrets
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -215,3 +215,21 @@ async def api_register(request: Request, db: Session = Depends(get_db)):
     db.refresh(user)
 
     return {"token": create_token(user.id), "user": {"id": user.id, "name": user.name, "email": user.email}}
+
+
+@router.get("/api/agent/token")
+async def get_agent_token(request: Request, db: Session = Depends(get_db)):
+    """Generate long-lived API token for local agent."""
+    from app.deps import get_current_user_optional
+
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Generate a long-lived token (stored in user record)
+    if not user.agent_api_token:
+        token = create_token(user.id)  # Uses standard JWT
+        user.agent_api_token = token
+        db.commit()
+
+    return {"token": user.agent_api_token}

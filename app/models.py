@@ -49,6 +49,19 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
 
+    # Zoom OAuth (per-user)
+    zoom_access_token = Column(Text, nullable=True)
+    zoom_refresh_token = Column(Text, nullable=True)
+    zoom_token_expires_at = Column(DateTime, nullable=True)
+    zoom_user_email = Column(String(255), nullable=True)
+    # Notifications
+    telegram_chat_id = Column(String(100), nullable=True)
+    notify_telegram = Column(Boolean, default=False)
+    notify_email = Column(Boolean, default=False)
+    # Capture settings
+    capture_source = Column(String(20), default="both")  # cloud | agent | both
+    agent_api_token = Column(String(500), nullable=True)
+
     folders = relationship("Folder", back_populates="user", cascade="all, delete-orphan")
     meetings = relationship("Meeting", back_populates="user", cascade="all, delete-orphan")
 
@@ -79,6 +92,7 @@ class Meeting(Base):
     duration_seconds = Column(Integer, default=0)
     source = Column(Enum(MeetingSource), default=MeetingSource.upload)
     zoom_meeting_id = Column(String(255), nullable=True)
+    zoom_recording_id = Column(String(255), nullable=True, unique=True)  # For Cloud API dedup
     audio_path = Column(String(1000), nullable=True)
     status = Column(Enum(MeetingStatus), default=MeetingStatus.downloading)
     error_message = Column(Text, nullable=True)

@@ -33,9 +33,13 @@ async def lifespan(app: FastAPI):
         from app.services.folder_watcher import start_folder_watcher
         tasks.append(asyncio.create_task(start_folder_watcher()))
 
-    # Zoom API polling (дополнительно, если настроен)
+    # Zoom API polling (legacy S2S, дополнительно, если настроен)
     from app.services.zoom_poller import start_polling
     tasks.append(asyncio.create_task(start_polling()))
+
+    # Per-user Zoom recording poller
+    from app.services.zoom_user_poller import start_user_polling
+    tasks.append(asyncio.create_task(start_user_polling()))
 
     yield
 
@@ -94,7 +98,7 @@ app = FastAPI(title="ZoomHub", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Auth-free paths
-_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/")
+_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/auth/zoom")
 
 
 @app.middleware("http")

@@ -10,6 +10,7 @@ from app.database import SessionLocal
 from app.models import Meeting, MeetingStatus, Transcript, Summary
 from app.services.transcriber import transcribe_file
 from app.services.summarizer import generate_summary
+from app.services.notify import notify_user
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,7 @@ async def process_meeting(meeting_id: int, download_url: str | None = None):
 
         # Готово
         _update_status(meeting_id, MeetingStatus.ready)
+        asyncio.create_task(notify_user(meeting_id))
         logger.info(f"[{meeting_id}] Обработка завершена успешно")
 
     except Exception as e:

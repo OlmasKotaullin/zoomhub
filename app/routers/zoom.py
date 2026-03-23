@@ -1,13 +1,13 @@
-"""Zoom роутер — статус polling и ручной триггер проверки."""
+"""Zoom роутер — статус polling, ручной триггер проверки, per-user OAuth."""
 
 import asyncio
 
 from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import templates
+from app.deps import templates, get_current_user_optional
 from app.services.zoom_client import is_configured
 
 router = APIRouter(prefix="/zoom")
@@ -75,6 +75,87 @@ async def check_now():
 
     return {"status": "ok", "message": "Проверка завершена"}
 
+
+# ──────────────── Per-user Zoom OAuth ────────────────
+
+@router.get("/auth/zoom")
+async def zoom_oauth_login(request: Request, db: Session = Depends(get_db)):
+    """Redirect to Zoom OAuth authorize URL."""
+    from app.services.zoom_oauth import get_authorize_url
+    redirect_uri = str(request.url_for("zoom_oauth_callback"))
+    # Behind reverse proxy, force HTTPS
+    if redirect_uri.startswith("http://") and "localhost" not in redirect_uri:
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+    url = get_authorize_url(redirect_uri)
+    return RedirectResponse(url)
+
+
+@router.get("/auth/zoom/callback")
+async def zoom_oauth_callback(request: Request, db: Session = Depends(get_db)):
+    """Exchange Zoom OAuth code for tokens, save in user record."""
+    from app.services.zoom_oauth import exchange_code, get_zoom_user_info
+
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    code = request.query_params.get("code")
+    if not code:
+        return RedirectResponse("/", status_code=302)
+
+    redirect_uri = str(request.url_for("zoom_oauth_callback"))
+    if redirect_uri.startswith("http://") and "localhost" not in redirect_uri:
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
+
+    try:
+        tokens = await exchange_code(code, redirect_uri)
+        user.zoom_access_token = tokens["access_token"]
+        user.zoom_refresh_token = tokens["refresh_token"]
+        user.zoom_token_expires_at = tokens["expires_at"]
+
+        # Get Zoom user email
+        info = await get_zoom_user_info(tokens["access_token"])
+        if info:
+            user.zoom_user_email = info.get("email")
+
+        db.commit()
+    except Exception:
+        pass
+
+    return RedirectResponse("/", status_code=302)
+
+
+@router.post("/api/zoom/disconnect")
+async def zoom_disconnect(request: Request, db: Session = Depends(get_db)):
+    """Clear user's Zoom tokens."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(401, "Not authenticated")
+
+    user.zoom_access_token = None
+    user.zoom_refresh_token = None
+    user.zoom_token_expires_at = None
+    user.zoom_user_email = None
+    db.commit()
+
+    return {"status": "ok"}
+
+
+@router.get("/api/zoom/status")
+async def zoom_user_status(request: Request, db: Session = Depends(get_db)):
+    """Return whether user has Zoom connected."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(401, "Not authenticated")
+
+    return {
+        "connected": user.zoom_access_token is not None,
+        "email": user.zoom_user_email,
+        "capture_source": user.capture_source,
+    }
+
+
+# ──────────────── Debug ────────────────
 
 @router.get("/debug/telegram")
 async def debug_telegram():

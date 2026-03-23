@@ -6,7 +6,7 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -14,6 +14,8 @@ from sqlalchemy import or_
 from app.database import get_db
 from app.models import Meeting, MeetingStatus, MeetingSource, Transcript, Summary, Folder, ChatMessage, ChatRole
 from app.config import RECORDINGS_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
+from app.deps import get_current_user_optional
+from app.services.pipeline import process_meeting
 import app.config as config_module
 
 router = APIRouter(prefix="/api")
@@ -395,3 +397,51 @@ async def provider_health(provider_type: str):
             raise HTTPException(status_code=400, detail="Неизвестный тип провайдера")
     except Exception as e:
         return {"healthy": False, "message": str(e)}
+
+
+# ──────────────── Agent Upload ────────────────
+
+@router.post("/agent/upload")
+async def agent_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    title: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Upload recording from local agent. Uses JWT auth via Authorization header."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(401, "Invalid or missing API token")
+
+    # Same logic as meetings upload but with source tracking
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported file type: {ext}")
+
+    if not title:
+        title = Path(file.filename).stem
+
+    meeting = Meeting(
+        user_id=user.id,
+        title=title,
+        source=MeetingSource.upload,
+        status=MeetingStatus.transcribing,
+    )
+    db.add(meeting)
+    db.commit()
+    db.refresh(meeting)
+
+    save_dir = RECORDINGS_DIR / str(meeting.id)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / f"original{ext}"
+
+    with open(save_path, "wb") as f:
+        content = await file.read()
+        f.write(content)
+
+    meeting.audio_path = str(save_path)
+    db.commit()
+
+    asyncio.create_task(process_meeting(meeting.id))
+
+    return {"id": meeting.id, "title": meeting.title, "status": meeting.status.value}
