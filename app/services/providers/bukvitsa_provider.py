@@ -12,14 +12,17 @@ from datetime import datetime, timezone
 
 from telethon import TelegramClient
 
-from app.config import TELEGRAM_API_ID, TELEGRAM_API_HASH, BUKVITSA_BOT_USERNAME, BASE_DIR
+from app.config import TELEGRAM_API_ID, TELEGRAM_API_HASH, BUKVITSA_BOT_USERNAME, BASE_DIR, DATA_DIR
 from app.services.providers.base import TranscriptionProvider
 
 logger = logging.getLogger(__name__)
 
 RESPONSE_TIMEOUT = 900  # 15 минут
 POLL_INTERVAL = 5  # секунд между проверками
-SESSION_PATH = str(BASE_DIR / "zoomhub")
+# Session in data dir (persistent volume on server)
+_session_in_data = DATA_DIR / "zoomhub"
+_session_in_base = BASE_DIR / "zoomhub"
+SESSION_PATH = str(_session_in_data if _session_in_data.with_suffix(".session").exists() else _session_in_base)
 
 DONE_MARKERS = ["обработан", "расшифровка:", "создано в буквица"]
 PROGRESS_MARKERS = [
