@@ -24,9 +24,18 @@ RECORDINGS_DIR.mkdir(exist_ok=True)
 LOGS_DIR = DATA_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "zoomhub.db"
-DB_URL = f"sqlite:///{DB_PATH}"
 
+# Database: PostgreSQL (prod) or SQLite (dev)
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
+
+# Auth
+SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+ACCESS_TOKEN_EXPIRE_HOURS = int(os.environ.get("ACCESS_TOKEN_EXPIRE_HOURS", "720"))  # 30 days
+
+# API Keys
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
 TELEGRAM_API_ID = int(os.environ.get("TELEGRAM_API_ID") or "0")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
 BUKVITSA_BOT_USERNAME = os.environ.get("BUKVITSA_BOT_USERNAME", "")
@@ -36,14 +45,17 @@ ZOOM_CLIENT_SECRET = os.environ.get("ZOOM_CLIENT_SECRET", "")
 ZOOM_ACCOUNT_ID = os.environ.get("ZOOM_ACCOUNT_ID", "")
 ZOOM_USER_EMAIL = os.environ.get("ZOOM_USER_EMAIL", "")
 
-# --- Провайдеры ---
+# --- Providers ---
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "auto")  # auto | claude | ollama
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 AUTO_ROUTING_THRESHOLD = 10000  # символов — выше → Claude, ниже → Ollama
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
-TRANSCRIPTION_PROVIDER = os.environ.get("TRANSCRIPTION_PROVIDER", "bukvitsa")  # bukvitsa | whisper
+TRANSCRIPTION_PROVIDER = os.environ.get("TRANSCRIPTION_PROVIDER", "bukvitsa")  # bukvitsa | whisper | openai_whisper
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
 
 ALLOWED_EXTENSIONS = {".mp4", ".mp3", ".wav", ".m4a", ".webm", ".ogg"}
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
+
+# Mode
+DOCKER_MODE = os.environ.get("DOCKER_MODE", "").lower() in ("1", "true", "yes")

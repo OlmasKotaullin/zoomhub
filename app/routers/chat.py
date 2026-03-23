@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import templates
+from app.deps import templates, get_current_user_optional, get_user_meeting, get_user_folder
 from app.models import Meeting, Folder, ChatMessage, ChatRole
 from app.services.chat_engine import ask_about_meeting, ask_about_folder
 
@@ -16,6 +16,13 @@ async def chat_history(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    # Verify meeting ownership
+    get_user_meeting(meeting_id, user, db)
+
     messages = (
         db.query(ChatMessage)
         .filter(ChatMessage.meeting_id == meeting_id)
@@ -34,6 +41,13 @@ async def clear_chat(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    # Verify meeting ownership
+    get_user_meeting(meeting_id, user, db)
+
     db.query(ChatMessage).filter(ChatMessage.meeting_id == meeting_id).delete()
     db.commit()
     return HTMLResponse("")
@@ -46,9 +60,11 @@ async def chat_meeting(
     message: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     # Сохраняем вопрос пользователя
     user_msg = ChatMessage(
@@ -92,9 +108,11 @@ async def chat_folder(
     message: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    folder = db.query(Folder).filter(Folder.id == folder_id).first()
-    if not folder:
-        raise HTTPException(status_code=404, detail="Папка не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folder = get_user_folder(folder_id, user, db)
 
     user_msg = ChatMessage(
         folder_id=folder_id,

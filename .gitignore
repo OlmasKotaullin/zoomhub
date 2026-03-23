@@ -12,3 +12,4 @@ ZoomHubApp/ZoomHub
 ZoomHubApp/ZoomHub.app/
 ZoomHubApp/*.dmg
 src-tauri/target/
+alembic/versions/__pycache__/

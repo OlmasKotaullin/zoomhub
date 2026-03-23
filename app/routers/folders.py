@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from pathlib import Path
 
 from app.database import get_db
-from app.deps import templates
+from app.deps import templates, get_current_user_optional, get_user_folder
 from app.models import Folder, Meeting
 from app.config import (
     ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_ACCOUNT_ID,
@@ -20,7 +20,11 @@ router = APIRouter()
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, db: Session = Depends(get_db)):
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     session_exists = Path(f"{BASE_DIR}/zoomhub.session").exists()
 
     # Health check провайдеров
@@ -39,6 +43,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
 
     return templates.TemplateResponse("settings.html", {
         "request": request,
+        "user": user,
         "folders": folders,
         "zoom_ok": bool(ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET and ZOOM_ACCOUNT_ID),
         "telegram_ok": bool(TELEGRAM_API_ID and TELEGRAM_API_HASH and session_exists),
@@ -54,8 +59,12 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/settings/llm-provider")
-async def switch_llm_provider(request: Request, provider: str = Form(...)):
+async def switch_llm_provider(request: Request, provider: str = Form(...), db: Session = Depends(get_db)):
     """Переключает LLM-провайдер (claude / ollama)."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
     if provider not in ("claude", "ollama", "auto"):
         raise HTTPException(status_code=400, detail="Неизвестный провайдер")
 
@@ -67,8 +76,12 @@ async def switch_llm_provider(request: Request, provider: str = Form(...)):
 
 
 @router.post("/settings/transcription-provider")
-async def switch_transcription_provider(request: Request, provider: str = Form(...)):
+async def switch_transcription_provider(request: Request, provider: str = Form(...), db: Session = Depends(get_db)):
     """Переключает транскрипция-провайдер (bukvitsa / whisper)."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
     if provider not in ("bukvitsa", "whisper"):
         raise HTTPException(status_code=400, detail="Неизвестный провайдер")
 
@@ -80,8 +93,12 @@ async def switch_transcription_provider(request: Request, provider: str = Form(.
 
 
 @router.get("/settings/health/{provider_type}")
-async def check_provider_health(provider_type: str):
+async def check_provider_health(request: Request, provider_type: str, db: Session = Depends(get_db)):
     """Проверяет здоровье провайдера."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
     try:
         if provider_type == "llm":
             from app.services.providers import get_llm_provider
@@ -100,15 +117,21 @@ async def check_provider_health(provider_type: str):
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     recent_meetings = (
         db.query(Meeting)
+        .filter(Meeting.user_id == user.id)
         .order_by(Meeting.created_at.desc())
         .limit(10)
         .all()
     )
     return templates.TemplateResponse("index.html", {
         "request": request,
+        "user": user,
         "folders": folders,
         "recent_meetings": recent_meetings,
     })
@@ -116,9 +139,14 @@ async def index(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/folders", response_class=HTMLResponse)
 async def list_folders(request: Request, db: Session = Depends(get_db)):
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     return templates.TemplateResponse("partials/folder_list.html", {
         "request": request,
+        "user": user,
         "folders": folders,
     })
 
@@ -131,14 +159,19 @@ async def create_folder(
     keywords: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    folder = Folder(name=name, icon=icon, keywords=keywords)
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folder = Folder(name=name, icon=icon, keywords=keywords, user_id=user.id)
     db.add(folder)
     db.commit()
     db.refresh(folder)
 
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     return templates.TemplateResponse("partials/folder_list.html", {
         "request": request,
+        "user": user,
         "folders": folders,
     })
 
@@ -149,16 +182,19 @@ async def delete_folder(
     folder_id: int,
     db: Session = Depends(get_db),
 ):
-    folder = db.query(Folder).filter(Folder.id == folder_id).first()
-    if not folder:
-        raise HTTPException(status_code=404, detail="Папка не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folder = get_user_folder(folder_id, user, db)
 
     db.delete(folder)
     db.commit()
 
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     return templates.TemplateResponse("partials/folder_list.html", {
         "request": request,
+        "user": user,
         "folders": folders,
     })
 
@@ -169,20 +205,23 @@ async def folder_detail(
     folder_id: int,
     db: Session = Depends(get_db),
 ):
-    folder = db.query(Folder).filter(Folder.id == folder_id).first()
-    if not folder:
-        raise HTTPException(status_code=404, detail="Папка не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    folder = get_user_folder(folder_id, user, db)
 
     meetings = (
         db.query(Meeting)
-        .filter(Meeting.folder_id == folder_id)
+        .filter(Meeting.folder_id == folder_id, Meeting.user_id == user.id)
         .order_by(Meeting.created_at.desc())
         .all()
     )
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
 
     return templates.TemplateResponse("folder.html", {
         "request": request,
+        "user": user,
         "folder": folder,
         "meetings": meetings,
         "folders": folders,

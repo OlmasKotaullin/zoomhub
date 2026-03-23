@@ -1,29 +1,38 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.pool import NullPool, QueuePool
 
-from app.config import DB_URL, DATA_DIR, RECORDINGS_DIR, LOGS_DIR
+from app.config import DATABASE_URL, DATA_DIR, RECORDINGS_DIR, LOGS_DIR
+
+_is_sqlite = DATABASE_URL.startswith("sqlite")
 
 
 class Base(DeclarativeBase):
     pass
 
 
-# NullPool — каждая сессия получает свой connection (важно для async-задач)
-engine = create_engine(
-    DB_URL,
-    connect_args={"check_same_thread": False, "timeout": 60},
-    poolclass=NullPool,
-)
+# Engine: SQLite vs PostgreSQL
+_engine_kwargs: dict = {}
+
+if _is_sqlite:
+    _engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 60}
+    _engine_kwargs["poolclass"] = NullPool
+else:
+    _engine_kwargs["poolclass"] = QueuePool
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+
+engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
 
-# WAL mode для SQLite — убирает "database is locked"
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA busy_timeout=60000")
-    cursor.close()
+# WAL mode for SQLite only
+if _is_sqlite:
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=60000")
+        cursor.close()
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

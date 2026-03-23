@@ -9,6 +9,20 @@ anthropic==0.43.0
 telethon==1.37.0
 aiofiles==24.1.0
 
+# Auth
+bcrypt>=4.0
+python-jose[cryptography]==3.3.0
+
+# Database
+alembic>=1.13
+psycopg2-binary>=2.9
+
+# Transcription (cloud)
+openai>=1.0
+
+# Production
+slowapi>=0.1
+
 # Dev / Testing
 pytest==8.3.4
 pytest-asyncio==0.25.0

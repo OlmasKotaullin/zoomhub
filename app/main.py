@@ -1,11 +1,14 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.config import DOCKER_MODE
 from app.database import init_db
 
 logging.basicConfig(
@@ -24,9 +27,10 @@ async def lifespan(app: FastAPI):
     # Восстанавливаем зависшие встречи (остались в transcribing/downloading после перезапуска)
     tasks.append(asyncio.create_task(_resume_stuck_meetings()))
 
-    # Мониторинг локальной папки Zoom (основной способ)
-    from app.services.folder_watcher import start_folder_watcher
-    tasks.append(asyncio.create_task(start_folder_watcher()))
+    # Мониторинг локальной папки Zoom (только локальный режим, не Docker)
+    if not DOCKER_MODE:
+        from app.services.folder_watcher import start_folder_watcher
+        tasks.append(asyncio.create_task(start_folder_watcher()))
 
     # Zoom API polling (дополнительно, если настроен)
     from app.services.zoom_poller import start_polling
@@ -87,18 +91,45 @@ async def _resume_stuck_meetings():
 
 app = FastAPI(title="ZoomHub", lifespan=lifespan)
 
+# Auth-free paths
+_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/")
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+        return await call_next(request)
+
+    from app.deps import get_current_user_optional
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        user = get_current_user_optional(request, db)
+    finally:
+        db.close()
+
+    if not user:
+        if path.startswith("/api/"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"error": "Не авторизован"}, status_code=401)
+        return RedirectResponse("/login", status_code=302)
+
+    return await call_next(request)
+
 
 @app.get("/health")
 async def health_check():
-    """Health check для Tauri — проверяет что бэкенд работает."""
-    return {"status": "ok", "app": "ZoomHub"}
+    return {"status": "ok", "app": "ZoomHub", "version": "2.0.0"}
 
 
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-from app.routers import folders, meetings, chat, zoom, native_api  # noqa: E402
+from app.routers import auth, folders, meetings, chat, zoom, native_api  # noqa: E402
 
+app.include_router(auth.router)
 app.include_router(folders.router)
 app.include_router(meetings.router)
 app.include_router(chat.router)

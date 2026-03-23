@@ -3,12 +3,12 @@ import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.database import get_db
-from app.deps import templates
+from app.deps import templates, get_current_user_optional, get_user_meeting, get_user_folder
 from app.models import Meeting, MeetingStatus, MeetingSource, Transcript, Summary, Folder
 from app.config import RECORDINGS_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 
@@ -21,6 +21,10 @@ async def search_meetings(
     q: str = "",
     db: Session = Depends(get_db),
 ):
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
     if not q or not q.strip():
         return templates.TemplateResponse("partials/meeting_list.html", {
             "request": request,
@@ -34,11 +38,12 @@ async def search_meetings(
         .outerjoin(Transcript)
         .outerjoin(Summary)
         .filter(
+            Meeting.user_id == user.id,
             or_(
                 Meeting.title.ilike(pattern),
                 Transcript.full_text.ilike(pattern),
                 Summary.tldr.ilike(pattern),
-            )
+            ),
         )
         .order_by(Meeting.created_at.desc())
         .all()
@@ -57,7 +62,11 @@ async def filter_meetings(
     status: str = "",
     db: Session = Depends(get_db),
 ):
-    query = db.query(Meeting)
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    query = db.query(Meeting).filter(Meeting.user_id == user.id)
     if status and status != "all":
         query = query.filter(Meeting.status == status)
     meetings = query.order_by(Meeting.created_at.desc()).all()
@@ -77,6 +86,10 @@ async def upload_meeting(
     folder_id: int = Form(None),
     db: Session = Depends(get_db),
 ):
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=422, detail=f"Формат {ext} не поддерживается. Допустимые: {', '.join(ALLOWED_EXTENSIONS)}")
@@ -84,11 +97,16 @@ async def upload_meeting(
     if not title:
         title = Path(file.filename).stem
 
+    # Validate folder ownership if folder_id provided
+    if folder_id:
+        get_user_folder(folder_id, user, db)
+
     meeting = Meeting(
         title=title,
         folder_id=folder_id if folder_id else None,
         source=MeetingSource.upload,
         status=MeetingStatus.transcribing,
+        user_id=user.id,
     )
     db.add(meeting)
     db.commit()
@@ -123,11 +141,20 @@ async def add_text_meeting(
     db: Session = Depends(get_db),
 ):
     """Добавить встречу из текста (вставить транскрипт вручную)."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    # Validate folder ownership if folder_id provided
+    if folder_id:
+        get_user_folder(folder_id, user, db)
+
     meeting = Meeting(
         title=title,
         folder_id=folder_id if folder_id else None,
         source=MeetingSource.upload,
         status=MeetingStatus.summarizing,
+        user_id=user.id,
     )
     db.add(meeting)
     db.commit()
@@ -204,14 +231,16 @@ async def meeting_detail(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
 
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+    meeting = get_user_meeting(meeting_id, user, db)
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
 
     return templates.TemplateResponse("meeting.html", {
         "request": request,
+        "user": user,
         "meeting": meeting,
         "folders": folders,
     })
@@ -225,13 +254,18 @@ async def update_meeting(
     folder_id: int = Form(None),
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     if title is not None:
         meeting.title = title
     if folder_id is not None:
+        # Validate folder ownership
+        if folder_id:
+            get_user_folder(folder_id, user, db)
         meeting.folder_id = folder_id
 
     db.commit()
@@ -249,9 +283,11 @@ async def delete_meeting(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     # Удаляем файлы с диска
     if meeting.audio_path:
@@ -271,9 +307,11 @@ async def meeting_transcript(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     return templates.TemplateResponse("partials/transcript.html", {
         "request": request,
@@ -287,9 +325,11 @@ async def meeting_summary(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     return templates.TemplateResponse("partials/summary.html", {
         "request": request,
@@ -299,11 +339,18 @@ async def meeting_summary(
 
 @router.get("/{meeting_id}/progress")
 async def meeting_progress(
+    request: Request,
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
     """JSON прогресс обработки встречи."""
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    user = get_current_user_optional(request, db)
+    if not user:
+        return {"percent": 0, "stage": "unknown", "label": ""}
+
+    meeting = db.query(Meeting).filter(
+        Meeting.id == meeting_id, Meeting.user_id == user.id
+    ).first()
     if not meeting:
         return {"percent": 0, "stage": "unknown", "label": ""}
 
@@ -325,9 +372,11 @@ async def meeting_status(
     meeting_id: int,
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     headers = {}
     if meeting.status in (MeetingStatus.ready, MeetingStatus.error):
@@ -347,9 +396,11 @@ async def resummarize_meeting(
     db: Session = Depends(get_db),
 ):
     """Пересгенерировать конспект из существующего транскрипта."""
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
     if not meeting.transcript:
         raise HTTPException(status_code=422, detail="Нет транскрипта")
 
@@ -371,9 +422,11 @@ async def retry_meeting(
     db: Session = Depends(get_db),
 ):
     """Повторная обработка встречи (транскрибация + саммари)."""
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    meeting = get_user_meeting(meeting_id, user, db)
 
     if not meeting.audio_path:
         raise HTTPException(status_code=422, detail="Нет аудиофайла для обработки")

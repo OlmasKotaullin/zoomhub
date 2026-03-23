@@ -83,6 +83,9 @@ def get_transcription_provider() -> TranscriptionProvider:
     elif TRANSCRIPTION_PROVIDER == "bukvitsa":
         from app.services.providers.bukvitsa_provider import BukvitsaProvider
         _transcription_instance = BukvitsaProvider()
+    elif TRANSCRIPTION_PROVIDER == "openai_whisper":
+        from app.services.providers.openai_whisper_provider import OpenAIWhisperProvider
+        _transcription_instance = OpenAIWhisperProvider()
     else:
         raise ValueError(f"Неизвестный транскрипция провайдер: {TRANSCRIPTION_PROVIDER}")
 
