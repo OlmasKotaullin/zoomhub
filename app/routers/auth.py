@@ -125,6 +125,9 @@ async def oauth_login(provider: str, request: Request):
     if not client:
         return RedirectResponse("/login", status_code=302)
     redirect_uri = str(request.url_for("oauth_callback", provider=provider))
+    # Behind reverse proxy (Fly.io/nginx), force HTTPS
+    if redirect_uri.startswith("http://") and "localhost" not in redirect_uri:
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
     return await client.authorize_redirect(request, redirect_uri)
 
 
