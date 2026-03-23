@@ -27,11 +27,9 @@ def default_zoom_folder() -> str:
 
 
 def file_hash(path: Path) -> str:
-    h = hashlib.md5()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    """Fast fingerprint: name + size + mtime (no content hashing)."""
+    stat = path.stat()
+    return f"{path.name}:{stat.st_size}:{int(stat.st_mtime)}"
 
 
 def load_state(state_path: Path) -> set:
@@ -47,14 +45,22 @@ def save_state(state_path: Path, hashes: set):
     state_path.write_text(json.dumps(list(hashes)))
 
 
-def find_new_files(folder: Path, processed: set) -> list[Path]:
+def find_new_files(folder: Path, processed: set, since_ts: float = 0) -> list[Path]:
     files = []
     if not folder.exists():
         return files
-    for ext in EXTENSIONS:
-        for f in folder.rglob(f"*{ext}"):
-            if f.is_file() and file_hash(f) not in processed:
-                files.append(f)
+    # Scan max 2 levels deep (folder/subfolder/file)
+    for sub in [folder] + [d for d in folder.iterdir() if d.is_dir()]:
+        try:
+            for f in sub.iterdir():
+                if f.is_file() and f.suffix.lower() in EXTENSIONS:
+                    if f.stat().st_mtime < since_ts:
+                        continue
+                    fh = file_hash(f)
+                    if fh not in processed:
+                        files.append(f)
+        except PermissionError:
+            continue
     return sorted(files, key=lambda f: f.stat().st_mtime)
 
 
@@ -101,27 +107,38 @@ def main():
     parser.add_argument("--token", required=True, help="API token (получить в настройках ZoomHub)")
     parser.add_argument("--server", default="https://zoomhub-app.fly.dev", help="URL сервера ZoomHub")
     parser.add_argument("--folder", default=default_zoom_folder(), help="Путь к папке Zoom")
+    parser.add_argument("--since", default="today", help="Обрабатывать файлы с даты (YYYY-MM-DD или 'today' или 'all')")
     parser.add_argument("--once", action="store_true", help="Однократная проверка (без цикла)")
     args = parser.parse_args()
 
     folder = Path(args.folder)
     state_path = folder / STATE_FILE
 
-    print(f"🎯 ZoomHub Agent")
+    print(f"🎯 ZoomHub Agent", flush=True)
     print(f"   Сервер: {args.server}")
     print(f"   Папка:  {folder}")
     print(f"   Режим:  {'однократно' if args.once else f'каждые {POLL_INTERVAL} сек'}")
     print()
 
     if not folder.exists():
-        print(f"⚠️  Папка {folder} не существует. Создаю...")
+        print(f"⚠️  Папка {folder} не существует. Создаю...", flush=True)
         folder.mkdir(parents=True, exist_ok=True)
 
+    # Parse --since
+    from datetime import datetime
+    if args.since == "today":
+        since_ts = datetime.now().replace(hour=0, minute=0, second=0).timestamp()
+    elif args.since == "all":
+        since_ts = 0
+    else:
+        since_ts = datetime.strptime(args.since, "%Y-%m-%d").timestamp()
+
     processed = load_state(state_path)
-    print(f"📂 Уже обработано: {len(processed)} файлов")
+    print(f"📂 Уже обработано: {len(processed)} файлов", flush=True)
+    print(f"📅 Файлы с: {datetime.fromtimestamp(since_ts).strftime('%Y-%m-%d') if since_ts else 'все'}", flush=True)
 
     while True:
-        new_files = find_new_files(folder, processed)
+        new_files = find_new_files(folder, processed, since_ts)
 
         if new_files:
             print(f"\n🔍 Найдено {len(new_files)} новых файлов:")
