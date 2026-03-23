@@ -103,6 +103,52 @@
     </ol>{% endif %}
   </div>
 
+  <!-- Telegram уведомления -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.16s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">📱 Telegram-уведомления</h3>
+      {% if user.telegram_chat_id %}
+        <span class="text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">Подключён</span>
+      {% else %}
+        <span class="text-[11px] font-semibold text-g-400 bg-g-100 px-2.5 py-1 rounded-full">Не подключён</span>
+      {% endif %}
+    </div>
+    {% if user.telegram_chat_id %}
+      <p class="text-[13px] text-g-500">После обработки каждой встречи вы получите саммари и задачи в Telegram.</p>
+      <p class="text-[12px] text-g-400 mt-2">Chat ID: {{ user.telegram_chat_id }}</p>
+    {% else %}
+      <p class="text-[13px] text-g-500 mb-3">Получайте саммари встреч прямо в Telegram.</p>
+      <a href="/api/agent/token" onclick="event.preventDefault(); getTelegramLink()"
+         class="inline-flex items-center gap-2 text-[12px] font-semibold px-4 py-2 rounded-xl bg-zoom text-white hover:bg-zoom-hover transition cursor-pointer">
+        🔗 Подключить Telegram
+      </a>
+    {% endif %}
+  </div>
+
+  <!-- Локальный агент -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.20s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">🖥 Локальный агент</h3>
+    </div>
+    <p class="text-[13px] text-g-500 mb-3">Автоматическая загрузка записей из папки Zoom на вашем компьютере.</p>
+    <div class="bg-g-50 rounded-xl p-3 mb-3">
+      <p class="text-[12px] text-g-500 mb-2">1. Получите API-токен:</p>
+      <div class="flex gap-2 items-center">
+        <input id="agentToken" type="text" readonly value="{{ user.agent_api_token or '' }}" placeholder="Нажмите кнопку для генерации"
+               class="flex-1 px-3 py-1.5 border border-g-200 rounded-lg text-[11px] font-mono bg-white">
+        <button onclick="generateAgentToken()" class="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-zoom text-white hover:bg-zoom-hover transition">
+          {{ 'Скопировать' if user.agent_api_token else 'Сгенерировать' }}
+        </button>
+      </div>
+    </div>
+    <div class="text-[12px] text-g-400">
+      <p>2. Запустите агент:</p>
+      <code class="block mt-1 text-zoom font-mono bg-zoom-light px-2 py-1.5 rounded text-[11px] break-all">
+        python3 agent/zoomhub_agent.py --token ВАШ_ТОКЕН --server https://zoomhub-app.fly.dev
+      </code>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -123,6 +169,26 @@ function switchTranscription(provider) {
     body: 'provider=' + provider
   }).then(r => r.json()).then(data => {
     if (data.status === 'ok') location.reload();
+  });
+}
+
+function getTelegramLink() {
+  fetch('/api/agent/token').then(r => r.json()).then(data => {
+    if (data.token) {
+      const link = 'https://t.me/ZoomHub_notify_bot?start=' + data.token;
+      window.open(link, '_blank');
+    }
+  });
+}
+
+function generateAgentToken() {
+  fetch('/api/agent/token').then(r => r.json()).then(data => {
+    if (data.token) {
+      document.getElementById('agentToken').value = data.token;
+      navigator.clipboard.writeText(data.token).then(() => {
+        alert('Токен скопирован в буфер обмена');
+      });
+    }
   });
 }
 </script>
