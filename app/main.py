@@ -98,7 +98,7 @@ app = FastAPI(title="ZoomHub", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Auth-free paths
-_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/auth/zoom")
+_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/auth/zoom", "/api/telegram/webhook")
 
 
 @app.middleware("http")

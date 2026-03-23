@@ -233,3 +233,52 @@ async def get_agent_token(request: Request, db: Session = Depends(get_db)):
         db.commit()
 
     return {"token": user.agent_api_token}
+
+
+# ---- Telegram Bot Webhook ----
+
+@router.post("/api/telegram/webhook")
+async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
+    """Handle Telegram bot updates (e.g., /start command to link account)."""
+    import httpx
+    from app.config import TELEGRAM_BOT_TOKEN
+    from app.auth import decode_token
+
+    body = await request.json()
+    message = body.get("message", {})
+    text = message.get("text", "")
+    chat_id = str(message.get("chat", {}).get("id", ""))
+
+    if not chat_id:
+        return {"ok": True}
+
+    if text.startswith("/start"):
+        # /start <token> — link Telegram to ZoomHub account
+        parts = text.split(maxsplit=1)
+        token = parts[1] if len(parts) > 1 else ""
+
+        reply = ""
+        if token:
+            user_id = decode_token(token)
+            if user_id:
+                user = db.query(User).filter(User.id == user_id).first()
+                if user:
+                    user.telegram_chat_id = chat_id
+                    user.notify_telegram = True
+                    db.commit()
+                    reply = f"Привет, {user.name}! Telegram подключён к ZoomHub. Вы будете получать уведомления о новых встречах."
+                else:
+                    reply = "Пользователь не найден. Попробуйте получить новую ссылку в настройках ZoomHub."
+            else:
+                reply = "Ссылка устарела. Получите новую в настройках ZoomHub."
+        else:
+            reply = "Для подключения уведомлений перейдите по ссылке из настроек ZoomHub."
+
+        if TELEGRAM_BOT_TOKEN and reply:
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                    json={"chat_id": chat_id, "text": reply},
+                )
+
+    return {"ok": True}
