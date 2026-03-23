@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ app/
 
-RUN mkdir -p /app/data/recordings /app/data/logs
+RUN mkdir -p /app/data/recordings /app/data/logs /app/app/static
 
 ENV DOCKER_MODE=1
 EXPOSE 8000
