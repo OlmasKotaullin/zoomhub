@@ -60,5 +60,13 @@ WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
 ALLOWED_EXTENSIONS = {".mp4", ".mp3", ".wav", ".m4a", ".webm", ".ogg"}
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
 
+# OAuth
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+YANDEX_CLIENT_ID = os.environ.get("YANDEX_CLIENT_ID", "")
+YANDEX_CLIENT_SECRET = os.environ.get("YANDEX_CLIENT_SECRET", "")
+GITHUB_CLIENT_ID = os.environ.get("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
+
 # Mode
 DOCKER_MODE = os.environ.get("DOCKER_MODE", "").lower() in ("1", "true", "yes")

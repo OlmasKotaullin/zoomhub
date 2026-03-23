@@ -7,8 +7,9 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import DOCKER_MODE
+from app.config import DOCKER_MODE, SECRET_KEY
 from app.database import init_db
 
 logging.basicConfig(
@@ -90,9 +91,10 @@ async def _resume_stuck_meetings():
 
 
 app = FastAPI(title="ZoomHub", lifespan=lifespan)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Auth-free paths
-_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/")
+_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/")
 
 
 @app.middleware("http")
