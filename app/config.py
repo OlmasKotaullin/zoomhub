@@ -27,6 +27,9 @@ DB_PATH = DATA_DIR / "zoomhub.db"
 
 # Database: PostgreSQL (prod) or SQLite (dev)
 DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{DB_PATH}")
+# Fly.io uses postgres:// but SQLAlchemy needs postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Auth
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
