@@ -436,8 +436,8 @@ async def agent_upload(
     save_path = save_dir / f"original{ext}"
 
     with open(save_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+        while chunk := await file.read(1024 * 1024):  # 1 MB chunks
+            f.write(chunk)
 
     meeting.audio_path = str(save_path)
     db.commit()
