@@ -53,3 +53,32 @@ def init_db():
 
     import app.models  # noqa: F401 — register models
     Base.metadata.create_all(bind=engine)
+
+    # Auto-migrate: add columns that may be missing in existing PostgreSQL tables
+    if not _is_sqlite:
+        from sqlalchemy import text, inspect
+        insp = inspect(engine)
+        with engine.connect() as c:
+            user_cols = {col["name"] for col in insp.get_columns("users")}
+            meeting_cols = {col["name"] for col in insp.get_columns("meetings")}
+
+            migrations = []
+            if "zoom_access_token" not in user_cols:
+                migrations += [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS zoom_access_token TEXT",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS zoom_refresh_token TEXT",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS zoom_token_expires_at TIMESTAMP",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS zoom_user_email VARCHAR(255)",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(100)",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_telegram BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_email BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS capture_source VARCHAR(20) DEFAULT 'both'",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_api_token VARCHAR(500)",
+                ]
+            if "zoom_recording_id" not in meeting_cols:
+                migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS zoom_recording_id VARCHAR(255) UNIQUE")
+
+            for sql in migrations:
+                c.execute(text(sql))
+            if migrations:
+                c.commit()
