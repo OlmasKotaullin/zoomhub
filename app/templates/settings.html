@@ -57,6 +57,11 @@
     </div>
     <p class="text-[13px] text-g-500 mb-3">Преобразование аудио в текст.</p>
     <div class="flex gap-2 mb-3">
+      <button onclick="switchTranscription('openai_whisper')" id="btn-trans-openai_whisper"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if transcription_provider == 'openai_whisper' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        🌐 OpenAI Whisper <span class="text-[10px] opacity-70">(облако)</span>
+      </button>
       <button onclick="switchTranscription('whisper')" id="btn-trans-whisper"
         class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
           {{ 'bg-zoom text-white border-zoom' if transcription_provider == 'whisper' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
@@ -69,7 +74,10 @@
       </button>
     </div>
     <div class="text-[12px] text-g-400">
-      {% if transcription_provider == 'whisper' %}
+      {% if transcription_provider == 'openai_whisper' %}
+        <p>OpenAI Whisper API — облачная транскрипция, высокое качество русского</p>
+        <p class="mt-1">Оплата по использованию: ~$0.006/мин аудио</p>
+      {% elif transcription_provider == 'whisper' %}
         <p>Модель: <strong class="text-g-600">{{ whisper_model }}</strong> — бесплатно, офлайн, ~10 мин на 1ч аудио</p>
         <p class="mt-1">Уже установлен. Качество русского: хорошее.</p>
       {% else %}

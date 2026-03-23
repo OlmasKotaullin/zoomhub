@@ -82,7 +82,7 @@ async def switch_transcription_provider(request: Request, provider: str = Form(.
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    if provider not in ("bukvitsa", "whisper"):
+    if provider not in ("bukvitsa", "whisper", "openai_whisper"):
         raise HTTPException(status_code=400, detail="Неизвестный провайдер")
 
     config_module.TRANSCRIPTION_PROVIDER = provider
