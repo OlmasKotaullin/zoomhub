@@ -143,42 +143,33 @@
         </div>
       </div>
 
-      <!-- Буквица usage -->
-      <div class="px-3 pb-2" id="bukvitsaWidget">
+      <!-- Monthly stats -->
+      <div class="px-3 pb-2" id="statsWidget">
         <div class="bg-g-50 rounded-xl p-3">
-          <div class="flex items-center gap-3">
-            <div class="relative flex-shrink-0">
-              <svg viewBox="0 0 36 36" class="w-11 h-11 -rotate-90">
-                <circle cx="18" cy="18" r="15" fill="none" stroke="#eef1f6" stroke-width="2.5"/>
-                <circle id="bkvCircle" cx="18" cy="18" r="15" fill="none" stroke="url(#bkvGrad)" stroke-width="2.5"
-                  stroke-dasharray="94.2" stroke-dashoffset="94.2" stroke-linecap="round"/>
-                <defs><linearGradient id="bkvGrad"><stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#4ade80"/></linearGradient></defs>
-              </svg>
-              <span id="bkvPct" class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-g-500">0%</span>
+          <div class="flex items-center gap-4">
+            <div class="text-center min-w-0">
+              <p id="statMeetings" class="text-[18px] font-extrabold text-g-800">—</p>
+              <p class="text-[9px] text-g-400 font-medium">встреч</p>
             </div>
-            <div class="min-w-0">
-              <p class="text-[11px] font-semibold text-g-700">Буквица</p>
-              <p id="bkvHours" class="text-[10px] text-g-400">— / 30 ч</p>
-              <p id="bkvLeft" class="text-[10px] text-ok font-medium">30 ч осталось</p>
+            <div class="text-center min-w-0">
+              <p id="statHours" class="text-[18px] font-extrabold text-zoom">—</p>
+              <p class="text-[9px] text-g-400 font-medium">часов</p>
+            </div>
+            <div class="text-center min-w-0">
+              <p id="statTasks" class="text-[18px] font-extrabold text-ai">—</p>
+              <p class="text-[9px] text-g-400 font-medium">задач</p>
             </div>
           </div>
+          <p class="text-[9px] text-g-300 text-center mt-1.5">за этот месяц</p>
         </div>
       </div>
 
       <script>
       (function() {
-        fetch('/api/bukvitsa-usage').then(r => r.json()).then(d => {
-          const total = 94.2;
-          const offset = total - (total * d.percent / 100);
-          document.getElementById('bkvCircle').style.cssText = 'stroke-dashoffset:'+offset+';transition:stroke-dashoffset 1s ease';
-          document.getElementById('bkvPct').textContent = d.percent + '%';
-          document.getElementById('bkvHours').textContent = d.used_hours.toFixed(1) + ' / ' + d.limit_hours + ' ч';
-          document.getElementById('bkvLeft').textContent = d.left_hours.toFixed(1) + ' ч осталось';
-          if (d.percent > 80) {
-            document.getElementById('bkvLeft').className = 'text-[10px] text-warn font-medium';
-            document.querySelector('#bkvGrad stop').setAttribute('stop-color', '#f59e0b');
-            document.querySelector('#bkvGrad stop:last-child').setAttribute('stop-color', '#fbbf24');
-          }
+        fetch('/api/my-stats').then(r => r.json()).then(d => {
+          document.getElementById('statMeetings').textContent = d.meetings;
+          document.getElementById('statHours').textContent = d.hours;
+          document.getElementById('statTasks').textContent = d.tasks;
         }).catch(() => {});
       })();
       </script>

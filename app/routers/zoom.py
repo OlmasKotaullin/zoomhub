@@ -17,41 +17,42 @@ from fastapi import APIRouter as _AR
 _api = _AR()
 
 
-@_api.get("/api/bukvitsa-usage")
-async def bukvitsa_usage(db: Session = Depends(get_db)):
-    """Статистика использования Буквицы за текущий месяц."""
+@_api.get("/api/my-stats")
+async def my_stats(request: Request, db: Session = Depends(get_db)):
+    """Личная статистика пользователя за текущий месяц."""
     from datetime import datetime, timezone
     from app.models import Meeting, MeetingStatus, Transcript
+    from app.deps import get_current_user_optional
+
+    user = get_current_user_optional(request, db)
+    if not user:
+        return {"meetings": 0, "hours": 0, "tasks": 0}
 
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    # Считаем длительность по количеству слов в транскриптах (150 слов/мин)
     meetings = (
         db.query(Meeting)
-        .join(Transcript)
+        .filter(Meeting.user_id == user.id)
         .filter(Meeting.created_at >= month_start)
         .filter(Meeting.status == MeetingStatus.ready)
         .all()
     )
 
     total_minutes = 0
+    total_tasks = 0
     for m in meetings:
         if m.transcript and m.transcript.full_text:
             words = len(m.transcript.full_text.split())
-            total_minutes += words / 150  # ~150 слов/мин речи
-
-    limit_hours = 30
-    used_hours = total_minutes / 60
-    left_hours = max(0, limit_hours - used_hours)
-    percent = min(100, int(used_hours / limit_hours * 100))
+            total_minutes += words / 150
+        if m.summary and m.summary.tasks:
+            total_tasks += len(m.summary.tasks)
 
     return {
-        "used_hours": round(used_hours, 1),
-        "limit_hours": limit_hours,
-        "left_hours": round(left_hours, 1),
-        "percent": percent,
-        "meetings_count": len(meetings),
+        "meetings": len(meetings),
+        "hours": round(total_minutes / 60, 1),
+        "tasks": total_tasks,
+        "month": now.strftime("%B %Y"),
     }
 
 
