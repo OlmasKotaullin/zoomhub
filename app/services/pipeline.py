@@ -174,3 +174,47 @@ async def process_meeting(meeting_id: int, download_url: str | None = None):
             _update_status(meeting_id, MeetingStatus.error, str(e))
         except Exception:
             pass
+
+
+async def process_meeting_transcript_only(meeting_id: int):
+    """Обработка встречи с уже готовым транскриптом (агент сделал транскрипцию локально).
+    Запускает только классификацию + суммаризацию."""
+    try:
+        db = SessionLocal()
+        try:
+            meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+            if not meeting or not meeting.transcript:
+                logger.error(f"[{meeting_id}] Нет транскрипта для summary-only")
+                return
+            transcript_text = meeting.transcript.full_text
+        finally:
+            db.close()
+
+        # Автоклассификация
+        try:
+            from app.services.classifier import classify_meeting
+            folder_name = classify_meeting(meeting_id)
+            if folder_name:
+                logger.info(f"[{meeting_id}] Автоклассификация → {folder_name}")
+        except Exception as e:
+            logger.warning(f"[{meeting_id}] Ошибка классификации: {e}")
+
+        # Генерация саммари
+        try:
+            _update_status(meeting_id, MeetingStatus.summarizing)
+            logger.info(f"[{meeting_id}] Генерирую конспект (transcript-only)...")
+            summary_data = await generate_summary(transcript_text)
+            _save_summary(meeting_id, summary_data)
+        except Exception as e:
+            logger.warning(f"[{meeting_id}] Ошибка конспекта: {e}")
+
+        _update_status(meeting_id, MeetingStatus.ready)
+        asyncio.create_task(notify_user(meeting_id))
+        logger.info(f"[{meeting_id}] Обработка (transcript-only) завершена")
+
+    except Exception as e:
+        logger.error(f"[{meeting_id}] Transcript-only pipeline error: {e}")
+        try:
+            _update_status(meeting_id, MeetingStatus.error, str(e))
+        except Exception:
+            pass

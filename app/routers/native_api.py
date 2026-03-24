@@ -445,3 +445,48 @@ async def agent_upload(
     asyncio.create_task(process_meeting(meeting.id))
 
     return {"id": meeting.id, "title": meeting.title, "status": meeting.status.value}
+
+
+@router.post("/agent/upload-transcript")
+async def agent_upload_transcript(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Upload pre-transcribed meeting from local agent (Bukvitsa runs locally).
+    Accepts JSON with transcript text — skips transcription, runs only summary."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        raise HTTPException(401, "Invalid or missing API token")
+
+    body = await request.json()
+    title = body.get("title", "Без названия")
+    transcript_text = body.get("transcript_text", "")
+    segments = body.get("segments", [])
+    duration_seconds = body.get("duration_seconds", 0)
+
+    if not transcript_text or len(transcript_text.strip()) < 10:
+        raise HTTPException(422, "Транскрипт слишком короткий")
+
+    meeting = Meeting(
+        user_id=user.id,
+        title=title,
+        source=MeetingSource.upload,
+        status=MeetingStatus.summarizing,
+        duration_seconds=duration_seconds,
+    )
+    db.add(meeting)
+    db.commit()
+    db.refresh(meeting)
+
+    transcript = Transcript(
+        meeting_id=meeting.id,
+        full_text=transcript_text.strip(),
+        segments=segments,
+    )
+    db.add(transcript)
+    db.commit()
+
+    from app.services.pipeline import process_meeting_transcript_only
+    asyncio.create_task(process_meeting_transcript_only(meeting.id))
+
+    return {"id": meeting.id, "title": meeting.title, "status": meeting.status.value}
