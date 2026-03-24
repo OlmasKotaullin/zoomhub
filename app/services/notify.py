@@ -24,10 +24,10 @@ async def notify_user(meeting_id: int):
         # Build message
         tasks_text = ""
         if summary.tasks:
-            tasks_lines = [f"  \u2022 {t.get('task', '')}" + (f" \u2014 {t.get('assignee', '')}" if t.get('assignee') else "") for t in summary.tasks[:5]]
-            tasks_text = "\n\ud83d\udcdd \u0417\u0430\u0434\u0430\u0447\u0438:\n" + "\n".join(tasks_lines)
+            tasks_lines = [f"  • {t.get('task', '')}" + (f" — {t.get('assignee', '')}" if t.get('assignee') else "") for t in summary.tasks[:5]]
+            tasks_text = "\n\nЗадачи:\n" + "\n".join(tasks_lines)
 
-        message = f"\ud83d\udccb \u0412\u0441\u0442\u0440\u0435\u0447\u0430 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0430\u043d\u0430: \"{meeting.title}\"\n\n{summary.tldr}{tasks_text}"
+        message = f"Встреча обработана: \"{meeting.title}\"\n\n{summary.tldr}{tasks_text}"
 
         if user.notify_telegram and user.telegram_chat_id:
             await _send_telegram(user.telegram_chat_id, message)
@@ -54,7 +54,6 @@ async def _send_telegram(chat_id: str, message: str):
             await client.post(url, json={
                 "chat_id": chat_id,
                 "text": message,
-                "parse_mode": "HTML",
             })
         logger.info(f"Telegram notification sent to {chat_id}")
     except Exception as e:
