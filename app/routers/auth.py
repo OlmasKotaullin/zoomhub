@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import create_token, hash_password, verify_password
 from app.database import get_db
 from app.deps import templates
-from app.models import User
+from app.models import User, InviteCode
 from app.oauth import oauth, get_available_providers
 
 router = APIRouter(tags=["auth"])
@@ -71,8 +71,10 @@ async def login(
 
 @router.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
+    from app.config import REQUIRE_INVITE_CODE
     return templates.TemplateResponse("register.html", {
         "request": request, "error": None, "providers": get_available_providers(),
+        "require_invite": REQUIRE_INVITE_CODE,
     })
 
 
@@ -83,26 +85,42 @@ async def register(
     email: str = Form(...),
     password: str = Form(...),
     password_confirm: str = Form(...),
+    invite_code: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    from app.config import REQUIRE_INVITE_CODE
+    ctx = {"request": request, "error": None, "providers": get_available_providers(), "require_invite": REQUIRE_INVITE_CODE}
+
     if password != password_confirm:
-        return templates.TemplateResponse(
-            "register.html", {"request": request, "error": "Пароли не совпадают", "providers": get_available_providers()},
-            status_code=400,
-        )
+        ctx["error"] = "Пароли не совпадают"
+        return templates.TemplateResponse("register.html", ctx, status_code=400)
     if len(password) < 6:
-        return templates.TemplateResponse(
-            "register.html", {"request": request, "error": "Пароль должен быть не менее 6 символов", "providers": get_available_providers()},
-            status_code=400,
-        )
+        ctx["error"] = "Пароль должен быть не менее 6 символов"
+        return templates.TemplateResponse("register.html", ctx, status_code=400)
+
+    # Validate invite code
+    invite = None
+    if REQUIRE_INVITE_CODE:
+        if not invite_code.strip():
+            ctx["error"] = "Введите инвайт-код"
+            return templates.TemplateResponse("register.html", ctx, status_code=400)
+        invite = db.query(InviteCode).filter(
+            InviteCode.code == invite_code.strip(),
+            InviteCode.is_active == True,
+        ).first()
+        if not invite or invite.used_count >= invite.max_uses:
+            ctx["error"] = "Неверный или использованный инвайт-код"
+            return templates.TemplateResponse("register.html", ctx, status_code=400)
+
     existing = db.query(User).filter(User.email == email).first()
     if existing:
-        return templates.TemplateResponse(
-            "register.html", {"request": request, "error": "Пользователь с таким email уже существует", "providers": get_available_providers()},
-            status_code=409,
-        )
+        ctx["error"] = "Пользователь с таким email уже существует"
+        return templates.TemplateResponse("register.html", ctx, status_code=409)
 
     user = User(name=name, email=email, hashed_password=hash_password(password))
+    if invite:
+        user.invite_code_id = invite.id
+        invite.used_count += 1
     db.add(user)
     db.commit()
     db.refresh(user)

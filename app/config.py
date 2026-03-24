@@ -79,5 +79,8 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 
+# Access control
+REQUIRE_INVITE_CODE = os.environ.get("REQUIRE_INVITE_CODE", "false").lower() in ("1", "true", "yes")
+
 # Mode
 DOCKER_MODE = os.environ.get("DOCKER_MODE", "").lower() in ("1", "true", "yes")

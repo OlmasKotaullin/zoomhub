@@ -78,6 +78,12 @@ def init_db():
             if "zoom_recording_id" not in meeting_cols:
                 migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS zoom_recording_id VARCHAR(255) UNIQUE")
 
+            if "onboarding_completed" not in user_cols:
+                migrations += [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code_id INTEGER",
+                ]
+
             for sql in migrations:
                 c.execute(text(sql))
             if migrations:

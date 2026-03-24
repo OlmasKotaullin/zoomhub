@@ -39,6 +39,18 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+class InviteCode(Base):
+    __tablename__ = "invite_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    max_uses = Column(Integer, default=1)
+    used_count = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -61,6 +73,9 @@ class User(Base):
     # Capture settings
     capture_source = Column(String(20), default="both")  # cloud | agent | both
     agent_api_token = Column(String(500), nullable=True)
+    # Onboarding
+    onboarding_completed = Column(Boolean, default=False)
+    invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)
 
     folders = relationship("Folder", back_populates="user", cascade="all, delete-orphan")
     meetings = relationship("Meeting", back_populates="user", cascade="all, delete-orphan")
