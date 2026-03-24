@@ -15,9 +15,9 @@ from app.oauth import oauth, get_available_providers
 router = APIRouter(tags=["auth"])
 
 
-def _login_response(user_id: int) -> RedirectResponse:
+def _login_response(user_id: int, redirect_to: str = "/") -> RedirectResponse:
     token = create_token(user_id)
-    response = RedirectResponse("/", status_code=302)
+    response = RedirectResponse(redirect_to, status_code=302)
     response.set_cookie("session_token", token, httponly=True, samesite="lax", max_age=30 * 24 * 3600)
     return response
 
@@ -124,7 +124,7 @@ async def register(
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _login_response(user.id)
+    return _login_response(user.id, redirect_to="/onboarding")
 
 
 @router.get("/logout")

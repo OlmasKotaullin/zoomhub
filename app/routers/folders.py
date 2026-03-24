@@ -116,6 +116,26 @@ async def check_provider_health(request: Request, provider_type: str, db: Sessio
         return {"ok": False, "error": str(e)}
 
 
+@router.get("/onboarding", response_class=HTMLResponse)
+async def onboarding_page(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if user.onboarding_completed:
+        return RedirectResponse("/", status_code=302)
+    return templates.TemplateResponse("onboarding.html", {"request": request, "user": user})
+
+
+@router.post("/onboarding/complete")
+async def onboarding_complete(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user_optional(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    user.onboarding_completed = True
+    db.commit()
+    return RedirectResponse("/", status_code=302)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
     user = get_current_user_optional(request, db)
