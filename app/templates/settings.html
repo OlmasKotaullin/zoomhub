@@ -92,15 +92,24 @@
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-bold text-[15px]">📹 Zoom</h3>
       {% if zoom_ok %}<span class="text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">Подключён</span>
-      {% else %}<span class="text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">Не настроен</span>{% endif %}
+      {% else %}<span class="text-[11px] font-semibold text-g-400 bg-g-100 px-2.5 py-1 rounded-full">Не подключён</span>{% endif %}
     </div>
-    {% if zoom_ok %}<p class="text-[13px] text-g-500">Polling каждые 2 мин. Новые записи обрабатываются автоматически.</p>
-    {% else %}<p class="text-[13px] text-g-500 mb-3">Server-to-Server OAuth нужен для авто-скачивания.</p>
-    <ol class="text-[13px] text-g-400 space-y-1.5 list-decimal list-inside">
-      <li>marketplace.zoom.us → Develop → Build App</li>
-      <li>Server-to-Server OAuth, <code class="text-zoom text-[12px] font-mono bg-zoom-light px-1.5 py-0.5 rounded">recording:read:admin</code></li>
-      <li>Скопируй ключи в <code class="text-zoom text-[12px] font-mono bg-zoom-light px-1.5 py-0.5 rounded">.env</code></li>
-    </ol>{% endif %}
+    {% if zoom_ok %}
+      <p class="text-[13px] text-g-500 mb-3">Zoom подключён. Новые записи проверяются каждые 2 минуты и обрабатываются автоматически.</p>
+      <div class="flex items-center gap-3 mt-2">
+        <span class="text-[12px] text-g-500">{{ user.zoom_user_email or '' }}</span>
+        <form method="POST" action="/zoom/disconnect" style="display:inline">
+          <button type="submit" class="text-[12px] font-semibold px-4 py-2 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 transition">Отключить</button>
+        </form>
+      </div>
+    {% elif zoom_configured %}
+      <p class="text-[13px] text-g-500 mb-3">Подключите Zoom для автоматического получения записей встреч.</p>
+      <a href="/zoom/connect" class="inline-flex items-center gap-2 text-[12px] font-semibold px-4 py-2 rounded-xl bg-zoom text-white hover:bg-zoom-hover transition">
+        📹 Подключить Zoom
+      </a>
+    {% else %}
+      <p class="text-[13px] text-g-400">Zoom OAuth не настроен администратором.</p>
+    {% endif %}
   </div>
 
   <!-- Telegram уведомления -->

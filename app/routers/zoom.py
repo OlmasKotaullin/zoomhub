@@ -78,7 +78,7 @@ async def check_now():
 
 # ──────────────── Per-user Zoom OAuth ────────────────
 
-@router.get("/auth/zoom")
+@router.get("/connect")
 async def zoom_oauth_login(request: Request, db: Session = Depends(get_db)):
     """Redirect to Zoom OAuth authorize URL."""
     from app.services.zoom_oauth import get_authorize_url
@@ -90,7 +90,7 @@ async def zoom_oauth_login(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url)
 
 
-@router.get("/auth/zoom/callback")
+@router.get("/connect/callback")
 async def zoom_oauth_callback(request: Request, db: Session = Depends(get_db)):
     """Exchange Zoom OAuth code for tokens, save in user record."""
     from app.services.zoom_oauth import exchange_code, get_zoom_user_info
@@ -122,10 +122,10 @@ async def zoom_oauth_callback(request: Request, db: Session = Depends(get_db)):
     except Exception:
         pass
 
-    return RedirectResponse("/", status_code=302)
+    return RedirectResponse("/settings", status_code=302)
 
 
-@router.post("/api/zoom/disconnect")
+@router.post("/disconnect")
 async def zoom_disconnect(request: Request, db: Session = Depends(get_db)):
     """Clear user's Zoom tokens."""
     user = get_current_user_optional(request, db)
@@ -138,10 +138,10 @@ async def zoom_disconnect(request: Request, db: Session = Depends(get_db)):
     user.zoom_user_email = None
     db.commit()
 
-    return {"status": "ok"}
+    return RedirectResponse("/settings", status_code=302)
 
 
-@router.get("/api/zoom/status")
+@router.get("/user-status")
 async def zoom_user_status(request: Request, db: Session = Depends(get_db)):
     """Return whether user has Zoom connected."""
     user = get_current_user_optional(request, db)

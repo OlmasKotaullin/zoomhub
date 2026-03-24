@@ -30,7 +30,7 @@
 <div class="flex items-center flex-wrap gap-x-3 gap-y-1 mb-6 anim-up" style="animation-delay:0.08s">
   <span class="text-[12px] text-g-400">{{ meeting.date.strftime('%d.%m.%Y %H:%M') if meeting.date else '' }}</span>
   <span class="text-g-300">·</span>
-  <span class="text-[12px] text-g-400">{{ meeting.source.value }}</span>
+  <span class="text-[12px] text-g-400">{% if meeting.source.value == 'zoom' %}📹 Zoom{% else %}🎙️ Загрузка{% endif %}</span>
   <span class="text-g-300">·</span>
   <div hx-get="/meetings/{{ meeting.id }}/status" hx-trigger="{% if meeting.status.value not in ['ready','error'] %}every 3s{% endif %}" hx-swap="innerHTML">
     {% include "partials/status_badge.html" %}
@@ -38,12 +38,19 @@
   {% if meeting.transcript %}
   <span class="text-g-300">·</span>
   {% set wc = meeting.transcript.full_text.split()|length %}
-  <span class="text-[12px] text-g-400">{{ wc }} слов</span>
+  <span class="text-[12px] text-g-400">{{ wc }} слов (~{{ (wc / 150)|int }} мин)</span>
   {% if meeting.summary and meeting.summary.tasks %}
   <span class="text-g-300">·</span>
   <span class="text-[12px] font-semibold text-ai">{{ meeting.summary.tasks|length }} задач</span>
   {% endif %}
   {% endif %}
+  <span class="text-g-300">·</span>
+  <select onchange="moveToFolder({{ meeting.id }}, this.value)" class="text-[12px] text-g-400 bg-transparent border-none cursor-pointer hover:text-zoom transition py-0 pr-4">
+    <option value="" {% if not meeting.folder %}selected{% endif %}>📂 Без папки</option>
+    {% for folder in folders %}
+    <option value="{{ folder.id }}" {% if meeting.folder_id == folder.id %}selected{% endif %}>{{ folder.icon }} {{ folder.name }}</option>
+    {% endfor %}
+  </select>
 </div>
 
 <!-- Tabs -->
@@ -151,5 +158,9 @@ function editTitle() { document.getElementById('meetingTitle').classList.add('hi
 function cancelEditTitle() { document.getElementById('meetingTitle').classList.remove('hidden'); document.getElementById('titleForm').classList.add('hidden'); }
 function askSuggested(t) { document.getElementById('chatInput').value=t; document.getElementById('suggestedPrompts').classList.add('hidden'); htmx.trigger('#chatForm','submit'); }
 function onChatDone() { document.getElementById('suggestedPrompts').classList.add('hidden'); document.getElementById('chatInput').value=''; const el=document.getElementById('meetingChatMessages'); el.scrollTop=el.scrollHeight; }
+function moveToFolder(meetingId, folderId) {
+  const fd = new FormData(); fd.append('folder_id', folderId || '0');
+  fetch('/meetings/' + meetingId, { method: 'PATCH', body: fd });
+}
 </script>
 {% endblock %}

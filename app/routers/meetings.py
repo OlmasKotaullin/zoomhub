@@ -298,7 +298,7 @@ async def delete_meeting(
     db.delete(meeting)
     db.commit()
 
-    return HTMLResponse("")
+    return HTMLResponse("", headers={"HX-Redirect": "/"})
 
 
 @router.get("/{meeting_id}/transcript", response_class=HTMLResponse)

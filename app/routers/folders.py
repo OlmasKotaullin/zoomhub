@@ -45,7 +45,8 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "user": user,
         "folders": folders,
-        "zoom_ok": bool(ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET and ZOOM_ACCOUNT_ID),
+        "zoom_ok": bool(user.zoom_access_token),
+        "zoom_configured": bool(ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET),
         "telegram_ok": bool(TELEGRAM_API_ID and TELEGRAM_API_HASH and session_exists),
         "bukvitsa_username": BUKVITSA_BOT_USERNAME,
         "claude_ok": bool(ANTHROPIC_API_KEY),
@@ -121,19 +122,49 @@ async def index(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=302)
 
+    from app.models import MeetingStatus, Transcript
+    from sqlalchemy import func
+
     folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     recent_meetings = (
         db.query(Meeting)
         .filter(Meeting.user_id == user.id)
         .order_by(Meeting.created_at.desc())
-        .limit(10)
+        .limit(20)
         .all()
     )
+
+    # Stats
+    total = db.query(func.count(Meeting.id)).filter(Meeting.user_id == user.id).scalar() or 0
+    ready = db.query(func.count(Meeting.id)).filter(Meeting.user_id == user.id, Meeting.status == MeetingStatus.ready).scalar() or 0
+    processing = db.query(func.count(Meeting.id)).filter(
+        Meeting.user_id == user.id,
+        Meeting.status.in_([MeetingStatus.downloading, MeetingStatus.transcribing, MeetingStatus.summarizing])
+    ).scalar() or 0
+    errors = db.query(func.count(Meeting.id)).filter(Meeting.user_id == user.id, Meeting.status == MeetingStatus.error).scalar() or 0
+
+    # Total transcription words → hours estimate
+    total_words = (
+        db.query(func.sum(func.length(Transcript.full_text)))
+        .join(Meeting)
+        .filter(Meeting.user_id == user.id)
+        .scalar()
+    ) or 0
+    # Rough: ~800 chars per minute of speech for Russian
+    hours_transcribed = round(total_words / 800 / 60, 1)
+
     return templates.TemplateResponse("index.html", {
         "request": request,
         "user": user,
         "folders": folders,
         "recent_meetings": recent_meetings,
+        "stats": {
+            "total": total,
+            "ready": ready,
+            "processing": processing,
+            "errors": errors,
+            "hours": hours_transcribed,
+        },
     })
 
 
