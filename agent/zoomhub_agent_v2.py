@@ -24,9 +24,10 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 STATE_FILE = ".zoomhub-agent-state.json"
 
 # Telegram credentials for Bukvitsa (shared, non-secret — это ID приложения, не токен)
-DEFAULT_API_ID = 20610877
-DEFAULT_API_HASH = "b65c403e23a653a49fc6024ee89e52c8"
-DEFAULT_BOT = "bykvitsa"
+import os as _os
+DEFAULT_API_ID = int(_os.environ.get("TG_API_ID", "20610877"))
+DEFAULT_API_HASH = _os.environ.get("TG_API_HASH", "06a021c0c0046cd67085dd7452deaaf8")
+DEFAULT_BOT = _os.environ.get("TG_BOT", "bykvitsa")
 DEFAULT_SERVER = "https://zoomhub-app.fly.dev"
 
 
@@ -327,6 +328,13 @@ async def main_async():
 
 
 def main():
+    # If no config and no CLI args → open GUI setup
+    cfg = load_config()
+    if not cfg.get("token") and len(sys.argv) == 1:
+        from web_setup import run_gui_setup
+        run_gui_setup()
+        return
+
     asyncio.run(main_async())
 
 
