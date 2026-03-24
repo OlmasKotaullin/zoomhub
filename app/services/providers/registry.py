@@ -20,6 +20,11 @@ def _make_claude() -> LLMProvider:
     return ClaudeProvider()
 
 
+def _make_gemini() -> LLMProvider:
+    from app.services.providers.gemini_provider import GeminiProvider
+    return GeminiProvider()
+
+
 def get_llm_provider() -> LLMProvider:
     """Возвращает текущий LLM-провайдер (singleton, пересоздаётся при смене)."""
     global _llm_instance
@@ -33,8 +38,10 @@ def get_llm_provider() -> LLMProvider:
         _llm_instance = _make_ollama()
     elif LLM_PROVIDER == "claude":
         _llm_instance = _make_claude()
+    elif LLM_PROVIDER == "gemini":
+        _llm_instance = _make_gemini()
     elif LLM_PROVIDER == "auto":
-        _llm_instance = _make_ollama()  # default для auto — singleton не важен
+        _llm_instance = _make_gemini()  # default для auto — singleton не важен
     else:
         raise ValueError(f"Неизвестный LLM провайдер: {LLM_PROVIDER}")
 
@@ -48,19 +55,23 @@ def get_provider_for_text(text_length: int) -> LLMProvider:
     - auto: короткий текст → Ollama, длинный → Claude (если есть ключ)
     - ollama/claude: всегда один провайдер
     """
-    from app.config import LLM_PROVIDER, AUTO_ROUTING_THRESHOLD, ANTHROPIC_API_KEY
+    from app.config import LLM_PROVIDER, AUTO_ROUTING_THRESHOLD, ANTHROPIC_API_KEY, GOOGLE_AI_API_KEY
 
     if LLM_PROVIDER == "ollama":
         provider = _make_ollama()
     elif LLM_PROVIDER == "claude":
         provider = _make_claude()
+    elif LLM_PROVIDER == "gemini":
+        provider = _make_gemini()
     elif LLM_PROVIDER == "auto":
         if text_length < AUTO_ROUTING_THRESHOLD:
             provider = _make_ollama()
+        elif GOOGLE_AI_API_KEY:
+            provider = _make_gemini()
         elif ANTHROPIC_API_KEY:
             provider = _make_claude()
         else:
-            provider = _make_ollama()  # fallback если нет API-ключа
+            provider = _make_ollama()
     else:
         provider = _make_ollama()
 

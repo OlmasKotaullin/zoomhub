@@ -66,7 +66,7 @@ async def switch_llm_provider(request: Request, provider: str = Form(...), db: S
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    if provider not in ("claude", "ollama", "auto"):
+    if provider not in ("claude", "ollama", "gemini", "auto"):
         raise HTTPException(status_code=400, detail="Неизвестный провайдер")
 
     config_module.LLM_PROVIDER = provider
