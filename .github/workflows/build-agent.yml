@@ -1,0 +1,47 @@
+name: Build ZoomHub Agent
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            name: ZoomHubAgent-mac
+          - os: windows-latest
+            name: ZoomHubAgent-win.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install pyinstaller httpx telethon cryptg
+
+      - name: Build agent
+        working-directory: agent
+        run: |
+          pyinstaller --onefile --name ${{ matrix.name }} --hidden-import telethon --hidden-import cryptg --hidden-import httpx --add-data "bukvitsa_local.py:." zoomhub_agent_v2.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: agent/dist/${{ matrix.name }}
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: agent/dist/${{ matrix.name }}
