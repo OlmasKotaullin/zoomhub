@@ -17,43 +17,35 @@ from fastapi import APIRouter as _AR
 _api = _AR()
 
 
-@_api.get("/api/my-stats")
-async def my_stats(request: Request, db: Session = Depends(get_db)):
-    """Личная статистика пользователя за текущий месяц."""
-    from datetime import datetime, timezone
-    from app.models import Meeting, MeetingStatus, Transcript
-    from app.deps import get_current_user_optional
+@_api.get("/api/bukvitsa-usage")
+async def bukvitsa_usage():
+    """Статистика Буквицы — из последнего сообщения бота."""
+    import re
+    try:
+        from app.services.providers.bukvitsa_provider import _get_client, BUKVITSA_BOT_USERNAME
+        client = await _get_client()
+        bot = await client.get_entity(BUKVITSA_BOT_USERNAME)
+        msgs = await client.get_messages(bot, limit=10)
 
-    user = get_current_user_optional(request, db)
-    if not user:
-        return {"meetings": 0, "hours": 0, "tasks": 0}
+        for m in msgs:
+            text = m.text or ""
+            # Parse "22.69 из 30 часов (75.62%)"
+            match = re.search(r'(\d+[\.,]\d+)\s*из\s*(\d+)\s*час', text)
+            if match:
+                used = float(match.group(1).replace(",", "."))
+                limit = float(match.group(2))
+                left = max(0, limit - used)
+                percent = min(100, int(used / limit * 100)) if limit > 0 else 0
+                return {
+                    "used_hours": round(used, 1),
+                    "limit_hours": int(limit),
+                    "left_hours": round(left, 1),
+                    "percent": percent,
+                }
 
-    now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    meetings = (
-        db.query(Meeting)
-        .filter(Meeting.user_id == user.id)
-        .filter(Meeting.created_at >= month_start)
-        .filter(Meeting.status == MeetingStatus.ready)
-        .all()
-    )
-
-    total_minutes = 0
-    total_tasks = 0
-    for m in meetings:
-        if m.transcript and m.transcript.full_text:
-            words = len(m.transcript.full_text.split())
-            total_minutes += words / 150
-        if m.summary and m.summary.tasks:
-            total_tasks += len(m.summary.tasks)
-
-    return {
-        "meetings": len(meetings),
-        "hours": round(total_minutes / 60, 1),
-        "tasks": total_tasks,
-        "month": now.strftime("%B %Y"),
-    }
+        return {"used_hours": 0, "limit_hours": 30, "left_hours": 30, "percent": 0}
+    except Exception:
+        return {"used_hours": 0, "limit_hours": 30, "left_hours": 30, "percent": 0}
 
 
 @router.get("/status")
