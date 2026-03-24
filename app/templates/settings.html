@@ -28,6 +28,11 @@
           {{ 'bg-zoom text-white border-zoom' if llm_provider == 'ollama' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
         🦙 Ollama
       </button>
+      <button onclick="switchLLM('groq')" id="btn-llm-groq"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if llm_provider == 'groq' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        ⚡ Groq <span class="text-[10px] opacity-70">(бесплатно)</span>
+      </button>
       <button onclick="switchLLM('gemini')" id="btn-llm-gemini"
         class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
           {{ 'bg-zoom text-white border-zoom' if llm_provider == 'gemini' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
@@ -41,8 +46,11 @@
     </div>
     <div class="text-[12px] text-g-400">
       {% if llm_provider == 'auto' %}
-        <p>Короткие встречи → <strong class="text-g-600">Qwen 2.5:7b</strong> (бесплатно). Длинные → <strong class="text-g-600">Gemini Flash</strong> (бесплатно).</p>
-        <p class="mt-1">Порог: 10 000 символов транскрипта</p>
+        <p>Автоматический выбор лучшего доступного провайдера.</p>
+        <p class="mt-1 text-ok/70">Groq → Gemini → Ollama → Claude</p>
+      {% elif llm_provider == 'groq' %}
+        <p>Модель: <strong class="text-g-600">Llama 3.3 70B</strong> — бесплатно, 128K контекст, сверхбыстрый</p>
+        <p class="mt-1 text-ok/70">Встречи до 2 часов помещаются целиком</p>
       {% elif llm_provider == 'gemini' %}
         <p>Модель: <strong class="text-g-600">Gemini 2.0 Flash</strong> — бесплатно, 1M контекст, быстрый</p>
         <p class="mt-1 text-ok/70">Любая встреча до 4 часов помещается целиком</p>

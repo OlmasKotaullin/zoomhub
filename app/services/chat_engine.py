@@ -62,8 +62,13 @@ def _build_meeting_context(meeting: Meeting) -> str:
 
     if meeting.transcript:
         # Лимит транскрипта зависит от провайдера (Gemini = 900K, Claude = 100K, Ollama = 12K)
-        from app.config import LLM_PROVIDER, GOOGLE_AI_API_KEY
-        max_chars = 200000 if (LLM_PROVIDER in ("gemini", "auto") and GOOGLE_AI_API_KEY) else 20000
+        from app.config import LLM_PROVIDER, GOOGLE_AI_API_KEY, GROQ_API_KEY
+        if LLM_PROVIDER == "gemini" and GOOGLE_AI_API_KEY:
+            max_chars = 200000
+        elif LLM_PROVIDER in ("groq", "auto") and GROQ_API_KEY:
+            max_chars = 80000
+        else:
+            max_chars = 20000
         text = meeting.transcript.full_text
         if len(text) > max_chars:
             text = text[:max_chars] + f"\n\n[...транскрипт обрезан, показано {max_chars} из {len(meeting.transcript.full_text)} символов]"
