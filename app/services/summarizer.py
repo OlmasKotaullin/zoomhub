@@ -3,7 +3,7 @@
 import json
 import logging
 
-from app.services.providers.registry import get_provider_for_text
+from app.services.providers.registry import get_provider_for_text, make_provider_by_name
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +38,20 @@ CONTEXT_LIMITS = {
 }
 
 
-async def generate_summary(transcript_text: str) -> dict:
+async def generate_summary(transcript_text: str, provider_name: str | None = None) -> dict:
     """Генерирует конспект из текста транскрипта.
+
+    Args:
+        transcript_text: текст транскрипта
+        provider_name: имя провайдера (groq/gemini/claude/ollama) или None для автовыбора
 
     Returns:
         {"tldr": str, "tasks": list, "topics": list, "insights": list, "raw_response": str}
     """
-    provider = get_provider_for_text(len(transcript_text))
+    if provider_name:
+        provider = make_provider_by_name(provider_name)
+    else:
+        provider = get_provider_for_text(len(transcript_text))
     max_chars = CONTEXT_LIMITS.get(provider.name, 20000)
     text = transcript_text[:max_chars]
 

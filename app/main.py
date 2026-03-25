@@ -12,6 +12,14 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import DOCKER_MODE, SECRET_KEY
 from app.database import init_db
 
+# Увеличиваем лимит размера файла для multipart-загрузок (по умолчанию 1MB с python-multipart 0.0.18+)
+try:
+    from starlette.formparsers import MultiPartParser
+    MultiPartParser.max_file_size = 2 * 1024 * 1024 * 1024  # 2 GB
+    MultiPartParser.max_part_size = 2 * 1024 * 1024 * 1024  # 2 GB
+except (ImportError, AttributeError):
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -96,6 +104,18 @@ async def _resume_stuck_meetings():
 
 app = FastAPI(title="ZoomHub", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+
+# Логируем все 422 ошибки для отладки загрузки файлов
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger = logging.getLogger("app.upload")
+    logger.error(f"422 Validation Error on {request.method} {request.url.path}: {exc.errors()}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # Auth-free paths
 _PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/connect", "/api/telegram/webhook", "/onboarding")

@@ -83,7 +83,7 @@ async def upload_meeting(
     request: Request,
     file: UploadFile = File(...),
     title: str = Form(""),
-    folder_id: int = Form(None),
+    folder_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = get_current_user_optional(request, db)
@@ -97,13 +97,16 @@ async def upload_meeting(
     if not title:
         title = Path(file.filename).stem
 
+    # Парсим folder_id — HTML отправляет "" для "Без папки"
+    folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
+
     # Validate folder ownership if folder_id provided
-    if folder_id:
-        get_user_folder(folder_id, user, db)
+    if folder_id_int:
+        get_user_folder(folder_id_int, user, db)
 
     meeting = Meeting(
         title=title,
-        folder_id=folder_id if folder_id else None,
+        folder_id=folder_id_int,
         source=MeetingSource.upload,
         status=MeetingStatus.transcribing,
         user_id=user.id,
@@ -126,10 +129,8 @@ async def upload_meeting(
     from app.services.pipeline import process_meeting
     asyncio.create_task(process_meeting(meeting.id))
 
-    return templates.TemplateResponse("partials/meeting_card.html", {
-        "request": request,
-        "meeting": meeting,
-    })
+    # Редирект на главную — встреча появится в списке с прогресс-кольцом
+    return RedirectResponse("/", status_code=303)
 
 
 @router.post("/add-text", response_class=HTMLResponse)
@@ -137,7 +138,7 @@ async def add_text_meeting(
     request: Request,
     title: str = Form(...),
     transcript_text: str = Form(...),
-    folder_id: int = Form(None),
+    folder_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Добавить встречу из текста (вставить транскрипт вручную)."""
@@ -145,13 +146,14 @@ async def add_text_meeting(
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    # Validate folder ownership if folder_id provided
-    if folder_id:
-        get_user_folder(folder_id, user, db)
+    folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
+
+    if folder_id_int:
+        get_user_folder(folder_id_int, user, db)
 
     meeting = Meeting(
         title=title,
-        folder_id=folder_id if folder_id else None,
+        folder_id=folder_id_int,
         source=MeetingSource.upload,
         status=MeetingStatus.summarizing,
         user_id=user.id,
@@ -175,13 +177,10 @@ async def add_text_meeting(
     # Генерируем саммари в фоне
     asyncio.create_task(_generate_summary_for_meeting(meeting.id))
 
-    return templates.TemplateResponse("partials/meeting_card.html", {
-        "request": request,
-        "meeting": meeting,
-    })
+    return RedirectResponse("/", status_code=303)
 
 
-async def _generate_summary_for_meeting(meeting_id: int):
+async def _generate_summary_for_meeting(meeting_id: int, provider_name: str | None = None):
     """Фоновая генерация саммари для встречи."""
     from app.database import SessionLocal
     from app.services.summarizer import generate_summary
@@ -196,7 +195,7 @@ async def _generate_summary_for_meeting(meeting_id: int):
         db.commit()
 
         try:
-            summary_data = await generate_summary(meeting.transcript.full_text)
+            summary_data = await generate_summary(meeting.transcript.full_text, provider_name=provider_name)
 
             # Обновляем существующий или создаём новый
             existing = db.query(Summary).filter(Summary.meeting_id == meeting.id).first()
@@ -238,11 +237,17 @@ async def meeting_detail(
     meeting = get_user_meeting(meeting_id, user, db)
     folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
 
+    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
+
     return templates.TemplateResponse("meeting.html", {
         "request": request,
         "user": user,
         "meeting": meeting,
         "folders": folders,
+        "groq_available": bool(GROQ_API_KEY),
+        "gemini_available": bool(GOOGLE_AI_API_KEY),
+        "claude_available": bool(ANTHROPIC_API_KEY),
+        "ollama_available": False,
     })
 
 
@@ -251,7 +256,7 @@ async def update_meeting(
     request: Request,
     meeting_id: int,
     title: str = Form(None),
-    folder_id: int = Form(None),
+    folder_id: str = Form(None),
     db: Session = Depends(get_db),
 ):
     user = get_current_user_optional(request, db)
@@ -263,10 +268,10 @@ async def update_meeting(
     if title is not None:
         meeting.title = title
     if folder_id is not None:
-        # Validate folder ownership
-        if folder_id:
-            get_user_folder(folder_id, user, db)
-        meeting.folder_id = folder_id
+        folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
+        if folder_id_int:
+            get_user_folder(folder_id_int, user, db)
+        meeting.folder_id = folder_id_int
 
     db.commit()
     db.refresh(meeting)
@@ -393,6 +398,7 @@ async def meeting_status(
 async def resummarize_meeting(
     request: Request,
     meeting_id: int,
+    provider: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Пересгенерировать конспект из существующего транскрипта."""
@@ -407,12 +413,11 @@ async def resummarize_meeting(
     meeting.status = MeetingStatus.summarizing
     db.commit()
 
-    asyncio.create_task(_generate_summary_for_meeting(meeting.id))
+    provider_name = provider if provider else None
+    asyncio.create_task(_generate_summary_for_meeting(meeting.id, provider_name=provider_name))
 
-    return templates.TemplateResponse("partials/status_badge.html", {
-        "request": request,
-        "meeting": meeting,
-    })
+    # Redirect на страницу встречи — пользователь увидит статус "В обработке"
+    return RedirectResponse(f"/meetings/{meeting_id}", status_code=303)
 
 
 @router.post("/{meeting_id}/retry", response_class=HTMLResponse)

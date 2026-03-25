@@ -17,31 +17,43 @@ from fastapi import APIRouter as _AR
 _api = _AR()
 
 
+_bukvitsa_cache: dict = {"data": None, "ts": 0}
+
 @_api.get("/api/bukvitsa-usage")
 async def bukvitsa_usage():
-    """Статистика Буквицы — из последнего сообщения бота."""
-    import re
+    """Статистика Буквицы — из сообщения /subscription бота. Кешируется на 10 мин."""
+    import re, time
+
+    # Возвращаем кеш, если свежий (10 минут)
+    if _bukvitsa_cache["data"] and time.time() - _bukvitsa_cache["ts"] < 600:
+        return _bukvitsa_cache["data"]
+
     try:
         from app.services.providers.bukvitsa_provider import _get_client, BUKVITSA_BOT_USERNAME
         client = await _get_client()
         bot = await client.get_entity(BUKVITSA_BOT_USERNAME)
-        msgs = await client.get_messages(bot, limit=10)
+
+        # Ищем сообщение с "Обработано" (ответ на /subscription) — до 200 сообщений
+        msgs = await client.get_messages(bot, limit=200)
 
         for m in msgs:
             text = m.text or ""
-            # Parse "22.69 из 30 часов (75.62%)"
+            # Parse "22.69 из 30 часов (75.62%)" из ответа на /subscription
             match = re.search(r'(\d+[\.,]\d+)\s*из\s*(\d+)\s*час', text)
             if match:
                 used = float(match.group(1).replace(",", "."))
-                limit = float(match.group(2))
-                left = max(0, limit - used)
-                percent = min(100, int(used / limit * 100)) if limit > 0 else 0
-                return {
+                limit_h = float(match.group(2))
+                left = max(0, limit_h - used)
+                percent = min(100, int(used / limit_h * 100)) if limit_h > 0 else 0
+                result = {
                     "used_hours": round(used, 1),
-                    "limit_hours": int(limit),
+                    "limit_hours": int(limit_h),
                     "left_hours": round(left, 1),
                     "percent": percent,
                 }
+                _bukvitsa_cache["data"] = result
+                _bukvitsa_cache["ts"] = time.time()
+                return result
 
         return {"used_hours": 0, "limit_hours": 30, "left_hours": 30, "percent": 0}
     except Exception:

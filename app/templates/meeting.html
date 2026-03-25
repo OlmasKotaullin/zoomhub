@@ -15,8 +15,48 @@
   </div>
   <div class="flex items-center gap-2 flex-shrink-0 ml-4">
     {% if meeting.status.value == 'ready' and meeting.transcript %}
-    <button hx-post="/meetings/{{ meeting.id }}/resummarize" hx-swap="none"
-      class="z-btn text-[12px] px-3 py-1.5 text-ai border-[1.5px] border-ai/20 hover:bg-ai-light transition">↻ Пересгенерировать</button>
+    <div class="relative" id="regenWrap">
+      <button onclick="document.getElementById('regenDropdown').classList.toggle('hidden')"
+        class="z-btn text-[12px] px-3 py-1.5 text-ai border-[1.5px] border-ai/20 hover:bg-ai-light transition flex items-center gap-1">
+        ↻ Пересгенерировать
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="regenDropdown" class="hidden absolute right-0 top-full mt-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[220px]">
+        <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Выбери LLM</p>
+        {% set providers = [
+          ("groq", "Groq · Llama 3.3 70B", groq_available),
+          ("gemini", "Gemini Flash", gemini_available),
+          ("claude", "Claude Sonnet", claude_available),
+          ("ollama", "Ollama (локальный)", ollama_available),
+        ] %}
+        {% for name, label, available in providers %}
+        {% if available %}
+        <form action="/meetings/{{ meeting.id }}/resummarize" method="POST" class="contents">
+          <input type="hidden" name="provider" value="{{ name }}">
+          <button type="submit"
+            class="w-full text-left px-3 py-2 text-[12px] text-g-700 hover:bg-ai-light transition flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-ok flex-shrink-0"></span>
+            {{ label }}
+          </button>
+        </form>
+        {% else %}
+        <div class="w-full px-3 py-2 text-[12px] text-g-300 flex items-center gap-2 cursor-not-allowed">
+          <span class="w-2 h-2 rounded-full bg-g-200 flex-shrink-0"></span>
+          {{ label }}
+          <span class="ml-auto text-[10px]">нет ключа</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <script>
+    document.addEventListener('click', function(e) {
+      var wrap = document.getElementById('regenWrap');
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('regenDropdown').classList.add('hidden');
+      }
+    });
+    </script>
     {% endif %}
     {% if meeting.status.value == 'error' %}
     <button hx-post="/meetings/{{ meeting.id }}/retry" hx-target="#mainContent"

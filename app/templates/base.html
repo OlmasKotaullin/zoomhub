@@ -405,8 +405,9 @@
         <h2 class="text-lg font-bold">Загрузить запись</h2>
         <button onclick="document.getElementById('uploadModal').classList.add('hidden')" class="text-g-400 hover:text-g-700 text-xl transition">&times;</button>
       </div>
-      <form hx-post="/meetings/upload" hx-target="#mainContent" hx-encoding="multipart/form-data"
-        hx-on::after-request="document.getElementById('uploadModal').classList.add('hidden')">
+      <form action="/meetings/upload" method="POST" enctype="multipart/form-data"
+        onsubmit="document.getElementById('uploadBtn').disabled=true; document.getElementById('uploadBtnText').classList.add('hidden'); document.getElementById('uploadSpinner').classList.remove('hidden')"
+      >
         <div id="dropZone" class="drop-zone border-2 border-dashed border-g-200 rounded-2xl p-10 text-center mb-4 cursor-pointer hover:border-zoom/40"
           onclick="document.getElementById('fileInput').click()">
           <div class="w-14 h-14 mx-auto mb-4 rounded-2xl zoom-gradient-light flex items-center justify-center">
@@ -421,7 +422,13 @@
           <option value="">Без папки</option>
           {% for folder in folders %}<option value="{{ folder.id }}">{{ folder.icon }} {{ folder.name }}</option>{% endfor %}
         </select>
-        <button type="submit" class="z-btn z-btn-primary w-full py-3 text-sm">Загрузить и обработать</button>
+        <button id="uploadBtn" type="submit" class="z-btn z-btn-primary w-full py-3 text-sm flex items-center justify-center gap-2">
+          <span id="uploadBtnText">Загрузить и обработать</span>
+          <span id="uploadSpinner" class="hidden">
+            <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+            Загрузка...
+          </span>
+        </button>
       </form>
     </div>
   </div>
@@ -434,8 +441,9 @@
         <button onclick="document.getElementById('textModal').classList.add('hidden')" class="text-g-400 hover:text-g-700 text-xl transition">&times;</button>
       </div>
       <p class="text-g-400 text-xs mb-4">Вставь расшифровку из Буквицы. AI Companion автоматически сделает конспект.</p>
-      <form hx-post="/meetings/add-text" hx-target="#mainContent"
-        hx-on::after-request="document.getElementById('textModal').classList.add('hidden'); this.reset();">
+      <form action="/meetings/add-text" method="POST"
+        onsubmit="document.getElementById('textBtn').disabled=true; document.getElementById('textBtnText').classList.add('hidden'); document.getElementById('textSpinner').classList.remove('hidden')"
+      >
         <input name="title" placeholder="Название встречи" required class="z-input w-full bg-g-50 px-3.5 py-2.5 text-sm placeholder-g-400 mb-3">
         <textarea name="transcript_text" rows="10" required placeholder="Вставь текст транскрипта..."
           class="z-input w-full bg-g-50 px-4 py-3 text-sm placeholder-g-400 mb-3 resize-y leading-relaxed"></textarea>
@@ -443,7 +451,13 @@
           <option value="">Без папки</option>
           {% for folder in folders %}<option value="{{ folder.id }}">{{ folder.icon }} {{ folder.name }}</option>{% endfor %}
         </select>
-        <button type="submit" class="z-btn z-btn-primary w-full py-3 text-sm">Сохранить и обработать</button>
+        <button id="textBtn" type="submit" class="z-btn z-btn-primary w-full py-3 text-sm flex items-center justify-center gap-2">
+          <span id="textBtnText">Сохранить и обработать</span>
+          <span id="textSpinner" class="hidden">
+            <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+            Сохранение...
+          </span>
+        </button>
       </form>
     </div>
   </div>

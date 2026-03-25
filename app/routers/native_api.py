@@ -146,7 +146,7 @@ async def meeting_progress(meeting_id: int, db: Session = Depends(get_db)):
 async def upload_meeting(
     file: UploadFile = File(...),
     title: str = Form(""),
-    folder_id: int = Form(None),
+    folder_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     ext = Path(file.filename).suffix.lower()
@@ -156,9 +156,11 @@ async def upload_meeting(
     if not title:
         title = Path(file.filename).stem
 
+    folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
+
     meeting = Meeting(
         title=title,
-        folder_id=folder_id if folder_id else None,
+        folder_id=folder_id_int,
         source=MeetingSource.upload,
         status=MeetingStatus.transcribing,
     )
@@ -186,7 +188,7 @@ async def upload_meeting(
 async def update_meeting(
     meeting_id: int,
     title: str = Form(None),
-    folder_id: int = Form(None),
+    folder_id: str = Form(None),
     db: Session = Depends(get_db),
 ):
     meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
@@ -195,7 +197,7 @@ async def update_meeting(
     if title is not None:
         meeting.title = title
     if folder_id is not None:
-        meeting.folder_id = folder_id
+        meeting.folder_id = int(folder_id) if folder_id and folder_id.isdigit() else None
     db.commit()
     db.refresh(meeting)
     return _meeting_dict(meeting)

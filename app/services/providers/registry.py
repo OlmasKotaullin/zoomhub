@@ -127,3 +127,29 @@ def reset_transcription_provider():
     """Сбрасывает кэш транскрипция-провайдера (для смены в настройках)."""
     global _transcription_instance
     _transcription_instance = None
+
+
+def make_provider_by_name(name: str) -> LLMProvider:
+    """Создаёт LLM-провайдер по имени (без кэширования)."""
+    factories = {
+        "groq": _make_groq,
+        "gemini": _make_gemini,
+        "claude": _make_claude,
+        "ollama": _make_ollama,
+    }
+    factory = factories.get(name)
+    if not factory:
+        raise ValueError(f"Неизвестный провайдер: {name}")
+    return factory()
+
+
+def get_available_providers() -> list[dict]:
+    """Возвращает список провайдеров с информацией о доступности."""
+    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
+
+    return [
+        {"name": "groq", "label": "Groq (Llama 3.3 70B)", "available": bool(GROQ_API_KEY)},
+        {"name": "gemini", "label": "Gemini Flash", "available": bool(GOOGLE_AI_API_KEY)},
+        {"name": "claude", "label": "Claude Sonnet", "available": bool(ANTHROPIC_API_KEY)},
+        {"name": "ollama", "label": "Ollama (локальный)", "available": False},  # нет на сервере
+    ]
