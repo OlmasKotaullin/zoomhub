@@ -423,6 +423,18 @@ async def agent_upload(
     if not title:
         title = Path(file.filename).stem
 
+    # Dedup: extract Zoom meeting ID from filename (audio123456 / video123456)
+    import re
+    zoom_id_match = re.match(r'^(?:audio|video)(\d{5,})', Path(file.filename).stem)
+    if zoom_id_match:
+        zoom_id = zoom_id_match.group(1)
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.title.like(f"%{zoom_id}%"),
+        ).first()
+        if existing:
+            return {"id": existing.id, "title": existing.title, "status": existing.status.value, "skipped": True}
+
     meeting = Meeting(
         user_id=user.id,
         title=title,
@@ -468,6 +480,18 @@ async def agent_upload_transcript(
 
     if not transcript_text or len(transcript_text.strip()) < 10:
         raise HTTPException(422, "Транскрипт слишком короткий")
+
+    # Dedup: extract Zoom meeting ID from title (audio123456 / video123456)
+    import re
+    zoom_id_match = re.match(r'^(?:audio|video)(\d{5,})', title)
+    if zoom_id_match:
+        zoom_id = zoom_id_match.group(1)
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.title.like(f"%{zoom_id}%"),
+        ).first()
+        if existing:
+            return {"id": existing.id, "title": existing.title, "status": existing.status.value, "skipped": True}
 
     meeting = Meeting(
         user_id=user.id,

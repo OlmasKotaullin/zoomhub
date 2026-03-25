@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+{% block title %}AI-чат — ZoomHub{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 -mx-8 -my-8 h-[calc(100vh)] overflow-hidden">
+
+  <!-- Левая панель: сессии -->
+  <div class="w-[240px] bg-white border-r border-g-100 flex flex-col flex-shrink-0">
+    <!-- Папка -->
+    <div class="px-3 pt-4 pb-2">
+      <select id="chatFolderSelect" onchange="switchFolder(this.value)"
+        class="z-input w-full bg-g-50 px-3 py-2 text-[13px]">
+        <option value="">Все проекты</option>
+        {% for f in folders %}
+        <option value="{{ f.id }}" {% if folder_id == f.id %}selected{% endif %}>{{ f.icon }} {{ f.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Список сессий -->
+    <div class="flex-1 overflow-y-auto px-2 pt-1 space-y-0.5" id="sessionList">
+      {% for s in sessions %}
+      <a href="/chat?session_id={{ s.id }}{% if s.folder_id %}&folder_id={{ s.folder_id }}{% endif %}"
+        class="block px-3 py-2 rounded-xl text-[12px] transition truncate
+          {% if current_session and current_session.id == s.id %}bg-zoom-light text-zoom font-semibold{% else %}text-g-600 hover:bg-g-50{% endif %}">
+        {{ s.title }}
+      </a>
+      {% endfor %}
+      {% if not sessions %}
+      <p class="text-center text-g-300 text-[11px] pt-8">Нет диалогов</p>
+      {% endif %}
+    </div>
+
+    <!-- Кнопка нового чата -->
+    <div class="p-3">
+      <button onclick="createNewChat()" class="z-btn z-btn-primary w-full py-2 text-[12px] flex items-center justify-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Новый чат
+      </button>
+    </div>
+  </div>
+
+  <!-- Основная область чата -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- Верхняя панель -->
+    <div class="px-5 py-3 border-b border-g-100 flex items-center justify-between flex-shrink-0 bg-white">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-xl zoom-gradient flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        </div>
+        <div>
+          <p class="text-[14px] font-bold text-g-800" id="chatRoleName">
+            {% if role_name %}{{ role_name }}{% else %}AI Companion{% endif %}
+          </p>
+          <p class="text-[11px] text-g-400" id="chatSessionTitle">
+            {% if current_session %}{{ current_session.title }}{% else %}Новый чат{% endif %}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Провайдер -->
+        <select id="chatProvider" class="z-input bg-g-50 px-2.5 py-1.5 text-[11px] text-g-600 pr-6">
+          <option value="auto" {% if user_provider == 'auto' %}selected{% endif %}>Авто</option>
+          {% for p in providers %}
+          <option value="{{ p.name }}" {% if not p.available %}disabled{% endif %} {% if user_provider == p.name %}selected{% endif %}>
+            {{ p.label }}{% if not p.available %} (нет ключа){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+
+        <!-- Настройка роли -->
+        {% if folder_id %}
+        <button onclick="toggleRoleEditor()" class="text-g-400 hover:text-g-600 transition p-1.5 rounded-lg hover:bg-g-50" title="Настройка роли">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </button>
+        {% endif %}
+
+        <!-- Удалить сессию -->
+        {% if current_session %}
+        <button onclick="deleteCurrentSession()" class="text-g-300 hover:text-err transition p-1.5 rounded-lg hover:bg-g-50" title="Удалить чат">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Редактор ролей (скрыт) -->
+    <div id="roleEditor" class="hidden border-b border-g-100 bg-g-50 px-5 py-4">
+      <div class="max-w-2xl">
+        <h4 class="text-[13px] font-bold text-g-700 mb-2">Поведение AI</h4>
+        <p class="text-[11px] text-g-400 mb-3">Определите характер AI, сценарий диалога и бизнес-логику поведения.</p>
+        <input id="roleName" placeholder="Название роли (напр. Ассистент клиники)" value="{{ role_name }}"
+          class="z-input w-full bg-white px-3 py-2 text-[13px] mb-2">
+        <textarea id="rolePrompt" rows="6" placeholder="Ты — виртуальный ассистент медицинской клиники «Sunrise Medical»..."
+          class="z-input w-full bg-white px-3 py-2.5 text-[13px] resize-y"></textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="generatePrompt()" class="z-btn z-btn-ghost px-3 py-1.5 text-[12px] flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+            Сгенерировать
+          </button>
+          <button onclick="saveRole()" class="z-btn z-btn-primary px-4 py-1.5 text-[12px]">Сохранить</button>
+          <span id="roleSaveStatus" class="text-[11px] text-ok hidden">Сохранено</span>
+        </div>
+        <!-- Генератор -->
+        <div id="generateBox" class="hidden mt-3">
+          <p class="text-[11px] text-g-500 mb-1.5">Опишите ваш бизнес в 2-3 предложениях:</p>
+          <div class="flex gap-2">
+            <input id="bizDescription" placeholder="Мы — стоматологическая клиника в Москве, 5 врачей..."
+              class="z-input flex-1 bg-white px-3 py-2 text-[12px]">
+            <button onclick="runGenerate()" class="z-btn z-btn-primary px-3 py-1.5 text-[12px]">Go</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Сообщения -->
+    <div class="flex-1 overflow-y-auto px-6 py-6" id="chatMessages">
+      {% if messages %}
+        {% for msg in messages %}
+        <div class="flex gap-3 mb-4 {% if msg.role.value == 'assistant' %}zoom-gradient-light -mx-4 px-4 py-3 rounded-xl{% endif %}">
+          <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0
+            {% if msg.role.value == 'user' %}bg-g-100 text-g-600{% else %}bg-ai/12 text-ai{% endif %}">
+            {% if msg.role.value == 'user' %}Я{% else %}AI{% endif %}
+          </div>
+          <div class="text-[13px] leading-relaxed pt-0.5 min-w-0
+            {% if msg.role.value == 'assistant' %}text-g-700 ai-md{% else %}text-g-800 font-semibold{% endif %}">
+            {% if msg.role.value == 'assistant' %}<div class="ai-md-render">{{ msg.content }}</div>{% else %}{{ msg.content }}{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <!-- Пустое состояние -->
+        <div id="emptyState" class="flex flex-col items-center justify-center h-full text-center">
+          <div class="w-16 h-16 rounded-2xl zoom-gradient flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          </div>
+          <h3 class="text-[16px] font-bold text-g-800 mb-1">AI Companion</h3>
+          <p class="text-[13px] text-g-400 mb-6 max-w-sm">Задавайте вопросы по встречам, анализируйте проекты, получайте инсайты</p>
+
+          <div class="grid grid-cols-2 gap-2 max-w-md w-full">
+            <button onclick="sendQuick('Какие ключевые решения были приняты?')"
+              class="text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">
+              Ключевые решения
+            </button>
+            <button onclick="sendQuick('Составь план действий по результатам встреч')"
+              class="text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">
+              План действий
+            </button>
+            <button onclick="sendQuick('Покажи прогресс по задачам')"
+              class="text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">
+              Прогресс задач
+            </button>
+            <button onclick="sendQuick('Дай краткое резюме всех встреч')"
+              class="text-left text-[12px] bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom px-3 py-2.5 rounded-xl transition">
+              Резюме проекта
+            </button>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Typing indicator -->
+    <div id="chatTyping" class="hidden px-6 py-2">
+      <div class="flex gap-2 items-center text-[12px] text-g-400">
+        <div class="flex gap-0.5">
+          <span class="w-1.5 h-1.5 bg-zoom/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+          <span class="w-1.5 h-1.5 bg-zoom/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+          <span class="w-1.5 h-1.5 bg-zoom/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+        </div>
+        AI думает...
+      </div>
+    </div>
+
+    <!-- Поле ввода -->
+    <div class="px-5 py-3 border-t border-g-100 bg-white flex-shrink-0">
+      <div class="flex gap-2 items-end">
+        <textarea id="chatInput" rows="1" placeholder="Задайте вопрос..."
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
+          class="z-input flex-1 bg-g-50 px-4 py-2.5 text-[13px] placeholder-g-400 resize-none" style="min-height:40px"></textarea>
+        <button onclick="sendMessage()" id="sendBtn"
+          class="z-btn z-btn-primary px-4 py-2.5 text-[13px] flex items-center gap-1.5 flex-shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          Отправить
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// State
+let currentSessionId = {{ current_session.id if current_session else 'null' }};
+let currentFolderId = {{ folder_id if folder_id else 'null' }};
+let isSending = false;
+
+// Render markdown in existing messages
+document.querySelectorAll('.ai-md-render').forEach(el => {
+  if (typeof marked !== 'undefined') {
+    el.innerHTML = marked.parse(el.textContent);
+  }
+});
+scrollToBottom();
+
+function scrollToBottom() {
+  const el = document.getElementById('chatMessages');
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
+function switchFolder(folderId) {
+  const url = folderId ? '/chat?folder_id=' + folderId : '/chat';
+  window.location.href = url;
+}
+
+async function createNewChat() {
+  const folderId = document.getElementById('chatFolderSelect').value;
+  const provider = document.getElementById('chatProvider').value;
+
+  const resp = await fetch('/api/chat/sessions', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({folder_id: folderId || null, provider: provider !== 'auto' ? provider : null}),
+  });
+  const data = await resp.json();
+  currentSessionId = data.session_id;
+
+  let url = '/chat?session_id=' + data.session_id;
+  if (folderId) url += '&folder_id=' + folderId;
+  window.location.href = url;
+}
+
+async function deleteCurrentSession() {
+  if (!currentSessionId || !confirm('Удалить этот чат?')) return;
+  await fetch('/api/chat/sessions/' + currentSessionId, {method: 'DELETE'});
+  window.location.href = currentFolderId ? '/chat?folder_id=' + currentFolderId : '/chat';
+}
+
+function sendQuick(text) {
+  document.getElementById('chatInput').value = text;
+  sendMessage();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message || isSending) return;
+
+  // Create session if needed
+  if (!currentSessionId) {
+    const folderId = document.getElementById('chatFolderSelect').value;
+    const provider = document.getElementById('chatProvider').value;
+    const resp = await fetch('/api/chat/sessions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({folder_id: folderId || null, provider: provider !== 'auto' ? provider : null}),
+    });
+    const data = await resp.json();
+    currentSessionId = data.session_id;
+  }
+
+  // Clear empty state
+  const emptyState = document.getElementById('emptyState');
+  if (emptyState) emptyState.remove();
+
+  // Show user message
+  const msgArea = document.getElementById('chatMessages');
+  const userEl = document.createElement('div');
+  userEl.className = 'flex gap-3 mb-4';
+  userEl.innerHTML = `
+    <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 bg-g-100 text-g-600">Я</div>
+    <div class="text-[13px] text-g-800 leading-relaxed pt-0.5 font-semibold min-w-0">${escapeHtml(message)}</div>
+  `;
+  msgArea.appendChild(userEl);
+
+  input.value = '';
+  input.style.height = 'auto';
+  isSending = true;
+  document.getElementById('chatTyping').classList.remove('hidden');
+  document.getElementById('sendBtn').disabled = true;
+  scrollToBottom();
+
+  // Create assistant message container
+  const aiEl = document.createElement('div');
+  aiEl.className = 'flex gap-3 mb-4 zoom-gradient-light -mx-4 px-4 py-3 rounded-xl';
+  aiEl.innerHTML = `
+    <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 bg-ai/12 text-ai">AI</div>
+    <div class="text-[13px] text-g-700 leading-relaxed pt-0.5 ai-md min-w-0" id="streamContent"></div>
+  `;
+  msgArea.appendChild(aiEl);
+
+  // Stream response
+  const provider = document.getElementById('chatProvider').value;
+  try {
+    const resp = await fetch('/api/chat/message', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: currentSessionId, message: message, provider: provider !== 'auto' ? provider : null}),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    const contentEl = document.getElementById('streamContent');
+    let renderTimeout = null;
+
+    document.getElementById('chatTyping').classList.add('hidden');
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, {stream: true});
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(part.slice(6));
+          if (data.done) break;
+          if (data.error) {
+            fullText += '\n\n**Ошибка:** ' + data.error;
+            continue;
+          }
+          if (data.content) {
+            fullText += data.content;
+            // Debounced markdown render
+            if (renderTimeout) clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(() => {
+              if (typeof marked !== 'undefined') {
+                contentEl.innerHTML = marked.parse(fullText);
+              } else {
+                contentEl.textContent = fullText;
+              }
+              scrollToBottom();
+            }, 50);
+          }
+        } catch (e) {}
+      }
+    }
+
+    // Final render
+    if (typeof marked !== 'undefined') {
+      contentEl.innerHTML = marked.parse(fullText);
+    } else {
+      contentEl.textContent = fullText;
+    }
+    contentEl.removeAttribute('id');
+
+    // Update session title in sidebar
+    const titleEl = document.getElementById('chatSessionTitle');
+    if (titleEl && titleEl.textContent === 'Новый чат') {
+      titleEl.textContent = message.slice(0, 80);
+    }
+
+  } catch (e) {
+    console.error('Chat error:', e);
+    const contentEl = document.getElementById('streamContent');
+    if (contentEl) contentEl.textContent = 'Ошибка соединения. Попробуйте ещё раз.';
+  }
+
+  isSending = false;
+  document.getElementById('chatTyping').classList.add('hidden');
+  document.getElementById('sendBtn').disabled = false;
+  scrollToBottom();
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ---- Role Editor ----
+
+function toggleRoleEditor() {
+  const editor = document.getElementById('roleEditor');
+  editor.classList.toggle('hidden');
+  if (!editor.classList.contains('hidden')) {
+    loadRole();
+  }
+}
+
+async function loadRole() {
+  if (!currentFolderId) return;
+  try {
+    const resp = await fetch('/api/chat/role/' + currentFolderId);
+    const data = await resp.json();
+    document.getElementById('roleName').value = data.name || '';
+    document.getElementById('rolePrompt').value = data.system_prompt || '';
+  } catch (e) {}
+}
+
+async function saveRole() {
+  if (!currentFolderId) return;
+  const name = document.getElementById('roleName').value.trim();
+  const prompt = document.getElementById('rolePrompt').value.trim();
+
+  await fetch('/api/chat/role', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({folder_id: currentFolderId, name: name, system_prompt: prompt}),
+  });
+
+  const status = document.getElementById('roleSaveStatus');
+  status.classList.remove('hidden');
+  setTimeout(() => status.classList.add('hidden'), 2000);
+
+  if (name) document.getElementById('chatRoleName').textContent = name;
+}
+
+function generatePrompt() {
+  document.getElementById('generateBox').classList.toggle('hidden');
+}
+
+async function runGenerate() {
+  const desc = document.getElementById('bizDescription').value.trim();
+  if (!desc) return;
+
+  const textarea = document.getElementById('rolePrompt');
+  textarea.value = '';
+
+  try {
+    const resp = await fetch('/api/chat/role/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({description: desc}),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, {stream: true});
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(part.slice(6));
+          if (data.done) break;
+          if (data.content) {
+            textarea.value += data.content;
+            textarea.scrollTop = textarea.scrollHeight;
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {
+    textarea.value = 'Ошибка генерации. Попробуйте ещё раз.';
+  }
+
+  document.getElementById('generateBox').classList.add('hidden');
+}
+</script>
+{% endblock %}

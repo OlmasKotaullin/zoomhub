@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}Админ-панель — ZoomHub{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-[22px] font-extrabold text-g-900">Админ-панель</h1>
+    <span class="text-[11px] text-g-400 font-medium">{{ user.email }}</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="flex gap-1 bg-g-50 rounded-xl p-1">
+    <a href="/admin" class="px-4 py-2 rounded-lg text-[13px] font-semibold transition {% if tab == 'dashboard' %}bg-white text-zoom shadow-sm{% else %}text-g-500 hover:text-g-700{% endif %}">Обзор</a>
+    <a href="/admin/users" class="px-4 py-2 rounded-lg text-[13px] font-semibold transition {% if tab == 'users' %}bg-white text-zoom shadow-sm{% else %}text-g-500 hover:text-g-700{% endif %}">Пользователи</a>
+    <a href="/admin/tickets" class="px-4 py-2 rounded-lg text-[13px] font-semibold transition relative {% if tab == 'tickets' %}bg-white text-zoom shadow-sm{% else %}text-g-500 hover:text-g-700{% endif %}">
+      Обращения
+      {% if unread_tickets is defined and unread_tickets > 0 %}
+      <span class="absolute -top-1 -right-1 w-5 h-5 bg-err text-white text-[10px] font-bold rounded-full flex items-center justify-center">{{ unread_tickets }}</span>
+      {% endif %}
+    </a>
+    <a href="/admin/invites" class="px-4 py-2 rounded-lg text-[13px] font-semibold transition {% if tab == 'invites' %}bg-white text-zoom shadow-sm{% else %}text-g-500 hover:text-g-700{% endif %}">Инвайт-коды</a>
+  </div>
+
+  <!-- TAB: Dashboard -->
+  {% if tab == 'dashboard' %}
+  <div class="grid grid-cols-4 gap-3">
+    <div class="z-card px-4 py-3">
+      <p class="text-[22px] font-extrabold text-zoom">{{ total_users }}</p>
+      <p class="text-[11px] text-g-400 font-medium">Пользователей</p>
+    </div>
+    <div class="z-card px-4 py-3">
+      <p class="text-[22px] font-extrabold text-ok">{{ active_users }}</p>
+      <p class="text-[11px] text-g-400 font-medium">Активных</p>
+    </div>
+    <div class="z-card px-4 py-3">
+      <p class="text-[22px] font-extrabold">{{ total_meetings }}</p>
+      <p class="text-[11px] text-g-400 font-medium">Встреч обработано</p>
+      <p class="text-[10px] text-g-300 mt-0.5">{{ ready_meetings }} готовых / {{ error_meetings }} ошибок</p>
+    </div>
+    <div class="z-card px-4 py-3">
+      <p class="text-[22px] font-extrabold text-ai">{{ audio_hours }}</p>
+      <p class="text-[11px] text-g-400 font-medium">Часов аудио</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-3">
+    <div class="z-card px-4 py-3">
+      <p class="text-[18px] font-bold">{{ meetings_week }}</p>
+      <p class="text-[11px] text-g-400">За неделю</p>
+    </div>
+    <div class="z-card px-4 py-3">
+      <p class="text-[18px] font-bold">{{ meetings_month }}</p>
+      <p class="text-[11px] text-g-400">За месяц</p>
+    </div>
+    <div class="z-card px-4 py-3">
+      <p class="text-[18px] font-bold">{{ used_invites }}/{{ total_invites }}</p>
+      <p class="text-[11px] text-g-400">Инвайтов использовано</p>
+    </div>
+  </div>
+
+  <!-- Activity chart -->
+  {% if chart_labels %}
+  <div class="z-card p-5">
+    <p class="text-[13px] font-semibold text-g-700 mb-3">Активность (встречи за 30 дней)</p>
+    <div class="flex items-end gap-[3px] h-[120px]">
+      {% set max_val = chart_data | max if chart_data else 1 %}
+      {% for val in chart_data %}
+      <div class="flex-1 rounded-t-sm zoom-gradient transition-all hover:opacity-80"
+        style="height: {{ (val / max_val * 100) | int }}%"
+        title="{{ chart_labels[loop.index0] }}: {{ val }} встреч"></div>
+      {% endfor %}
+    </div>
+    <div class="flex justify-between mt-2">
+      <span class="text-[9px] text-g-300">{{ chart_labels[0] if chart_labels else '' }}</span>
+      <span class="text-[9px] text-g-300">{{ chart_labels[-1] if chart_labels else '' }}</span>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if unread_tickets > 0 %}
+  <a href="/admin/tickets" class="z-card px-5 py-4 flex items-center gap-3 border-l-4 border-err hover:bg-red-50 transition block">
+    <span class="text-[18px]">!</span>
+    <div>
+      <p class="text-[13px] font-semibold text-g-800">{{ unread_tickets }} непрочитанных обращений</p>
+      <p class="text-[11px] text-g-400">Перейти к обращениям</p>
+    </div>
+  </a>
+  {% endif %}
+
+  <!-- TAB: Users -->
+  {% elif tab == 'users' %}
+  <div class="z-card overflow-hidden">
+    <table class="w-full text-[12px]">
+      <thead>
+        <tr class="bg-g-50 text-g-500 text-left">
+          <th class="px-4 py-3 font-semibold">Пользователь</th>
+          <th class="px-3 py-3 font-semibold">Встречи</th>
+          <th class="px-3 py-3 font-semibold">Часы</th>
+          <th class="px-3 py-3 font-semibold">Конверсия</th>
+          <th class="px-3 py-3 font-semibold">Последняя</th>
+          <th class="px-3 py-3 font-semibold">Статус</th>
+          <th class="px-3 py-3 font-semibold"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-g-100">
+        {% for ud in users_data %}
+        <tr class="hover:bg-g-50/50 transition">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-g-800">{{ ud.user.name }}</p>
+            <p class="text-[10px] text-g-400">{{ ud.user.email }}</p>
+            <p class="text-[10px] text-g-300">Рег: {{ ud.user.created_at.strftime('%d.%m.%Y') if ud.user.created_at else '—' }}</p>
+          </td>
+          <td class="px-3 py-3">
+            <span class="font-bold text-g-800">{{ ud.meetings }}</span>
+            <span class="text-g-400">({{ ud.ready }} / {{ ud.errors }})</span>
+          </td>
+          <td class="px-3 py-3 font-medium">{{ ud.hours }} ч</td>
+          <td class="px-3 py-3">
+            <span class="{% if ud.conversion >= 80 %}text-ok{% elif ud.conversion >= 50 %}text-warn{% else %}text-err{% endif %} font-bold">{{ ud.conversion }}%</span>
+          </td>
+          <td class="px-3 py-3 text-g-400">
+            {{ ud.last_meeting.created_at.strftime('%d.%m %H:%M') if ud.last_meeting else '—' }}
+          </td>
+          <td class="px-3 py-3">
+            {% if ud.user.is_active %}
+            <span class="inline-flex items-center gap-1 text-ok"><span class="w-1.5 h-1.5 rounded-full bg-ok"></span> Активен</span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 text-g-400"><span class="w-1.5 h-1.5 rounded-full bg-g-300"></span> Неактивен</span>
+            {% endif %}
+          </td>
+          <td class="px-3 py-3">
+            {% if not ud.user.is_admin %}
+            <form action="/admin/users/{{ ud.user.id }}/toggle" method="POST">
+              <button type="submit" class="z-btn text-[10px] px-2 py-1 {% if ud.user.is_active %}text-err border border-err/20 hover:bg-red-50{% else %}text-ok border border-ok/20 hover:bg-green-50{% endif %}">
+                {{ 'Откл.' if ud.user.is_active else 'Вкл.' }}
+              </button>
+            </form>
+            {% else %}
+            <span class="text-[10px] text-ai font-semibold">admin</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- TAB: Tickets -->
+  {% elif tab == 'tickets' %}
+  <div class="flex gap-2 mb-4">
+    <a href="/admin/tickets" class="z-btn text-[11px] px-3 py-1.5 {% if not filter_status %}z-btn-primary{% else %}z-btn-ghost{% endif %}">Все</a>
+    <a href="/admin/tickets?status=new" class="z-btn text-[11px] px-3 py-1.5 {% if filter_status == 'new' %}z-btn-primary{% else %}z-btn-ghost{% endif %}">Новые</a>
+    <a href="/admin/tickets?status=in_progress" class="z-btn text-[11px] px-3 py-1.5 {% if filter_status == 'in_progress' %}z-btn-primary{% else %}z-btn-ghost{% endif %}">В работе</a>
+    <a href="/admin/tickets?status=resolved" class="z-btn text-[11px] px-3 py-1.5 {% if filter_status == 'resolved' %}z-btn-primary{% else %}z-btn-ghost{% endif %}">Решены</a>
+  </div>
+
+  {% if tickets %}
+  <div class="space-y-3">
+    {% for t in tickets %}
+    <div class="z-card p-5 {% if not t.is_read %}border-l-4 border-zoom{% endif %}">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[13px] font-bold text-g-800">{{ t.subject }}</span>
+            {% if t.priority == 'critical' %}
+            <span class="text-[9px] font-bold text-white bg-err px-1.5 py-0.5 rounded-md">Критический</span>
+            {% elif t.priority == 'important' %}
+            <span class="text-[9px] font-bold text-warn bg-warn/10 px-1.5 py-0.5 rounded-md">Важный</span>
+            {% endif %}
+            <span class="text-[9px] font-medium text-g-400 bg-g-50 px-1.5 py-0.5 rounded-md">
+              {% if t.category == 'bug' %}Баг{% elif t.category == 'suggestion' %}Предложение{% else %}Вопрос{% endif %}
+            </span>
+          </div>
+          <p class="text-[11px] text-g-400">{{ t.user.name }} ({{ t.user.email }}) — {{ t.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <form action="/admin/tickets/{{ t.id }}/status" method="POST" class="flex gap-1">
+            <select name="status" class="z-input text-[10px] px-2 py-1 bg-g-50">
+              <option value="new" {% if t.status == 'new' %}selected{% endif %}>Новый</option>
+              <option value="in_progress" {% if t.status == 'in_progress' %}selected{% endif %}>В работе</option>
+              <option value="resolved" {% if t.status == 'resolved' %}selected{% endif %}>Решён</option>
+            </select>
+            <button type="submit" class="z-btn z-btn-ghost text-[10px] px-2 py-1">OK</button>
+          </form>
+        </div>
+      </div>
+      <p class="text-[12px] text-g-700 leading-relaxed mb-3 whitespace-pre-wrap">{{ t.message }}</p>
+
+      {% if t.admin_reply %}
+      <div class="bg-zoom-light rounded-xl p-3 mb-3">
+        <p class="text-[10px] font-semibold text-zoom mb-1">Ваш ответ:</p>
+        <p class="text-[12px] text-g-700 whitespace-pre-wrap">{{ t.admin_reply }}</p>
+      </div>
+      {% endif %}
+
+      <form action="/admin/tickets/{{ t.id }}/reply" method="POST" class="flex gap-2">
+        <input name="reply" placeholder="Написать ответ..." value="{{ t.admin_reply or '' }}" class="z-input flex-1 bg-g-50 px-3 py-2 text-[12px] placeholder-g-400">
+        <button type="submit" class="z-btn z-btn-primary text-[11px] px-4 py-2">Ответить</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="z-card p-10 text-center">
+    <p class="text-g-400 text-[13px]">Обращений пока нет</p>
+  </div>
+  {% endif %}
+
+  <!-- TAB: Invites -->
+  {% elif tab == 'invites' %}
+  <form action="/admin/invites" method="POST" class="z-card p-4 flex gap-3 items-end">
+    <div class="flex-1">
+      <label class="text-[11px] font-semibold text-g-500 block mb-1">Макс. использований</label>
+      <input name="max_uses" type="number" value="1" min="1" class="z-input w-full bg-g-50 px-3 py-2 text-sm">
+    </div>
+    <button type="submit" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Создать код</button>
+  </form>
+
+  <div class="z-card overflow-hidden">
+    <table class="w-full text-[12px]">
+      <thead>
+        <tr class="bg-g-50 text-g-500 text-left">
+          <th class="px-4 py-3 font-semibold">Код</th>
+          <th class="px-3 py-3 font-semibold">Использован</th>
+          <th class="px-3 py-3 font-semibold">Макс.</th>
+          <th class="px-3 py-3 font-semibold">Статус</th>
+          <th class="px-3 py-3 font-semibold">Создан</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-g-100">
+        {% for inv in invites %}
+        <tr class="hover:bg-g-50/50">
+          <td class="px-4 py-3 font-mono font-bold text-zoom">{{ inv.code }}</td>
+          <td class="px-3 py-3">{{ inv.used_count }}</td>
+          <td class="px-3 py-3">{{ inv.max_uses }}</td>
+          <td class="px-3 py-3">
+            {% if inv.is_active and inv.used_count < inv.max_uses %}
+            <span class="text-ok font-medium">Активен</span>
+            {% elif inv.used_count >= inv.max_uses %}
+            <span class="text-g-400">Использован</span>
+            {% else %}
+            <span class="text-g-400">Неактивен</span>
+            {% endif %}
+          </td>
+          <td class="px-3 py-3 text-g-400">{{ inv.created_at.strftime('%d.%m.%Y') if inv.created_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,6 +1,7 @@
 """Базовые интерфейсы провайдеров."""
 
 from abc import ABC, abstractmethod
+from typing import AsyncGenerator
 
 
 class LLMProvider(ABC):
@@ -23,6 +24,16 @@ class LLMProvider(ABC):
             Текст ответа модели
         """
         ...
+
+    async def generate_stream(self, messages: list[dict], system: str = "",
+                              max_tokens: int = 4096) -> AsyncGenerator[str, None]:
+        """Потоковая генерация — yield-ит текстовые чанки.
+
+        Дефолтная реализация: вызывает generate() и отдаёт целиком.
+        Провайдеры могут переопределить для настоящего streaming.
+        """
+        result = await self.generate(messages, system=system, max_tokens=max_tokens)
+        yield result
 
     @abstractmethod
     async def health_check(self) -> bool:

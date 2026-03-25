@@ -118,7 +118,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # Auth-free paths
-_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/connect", "/api/telegram/webhook", "/onboarding")
+_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/connect", "/api/telegram/webhook", "/onboarding", "/forgot-password", "/reset-password", "/download")
 
 
 @app.middleware("http")
@@ -142,6 +142,10 @@ async def auth_middleware(request: Request, call_next):
             return JSONResponse({"error": "Не авторизован"}, status_code=401)
         return RedirectResponse("/login", status_code=302)
 
+    # Блокировка UI до завершения онбординга
+    if not getattr(user, "onboarding_completed", True) and not path.startswith(("/onboarding", "/api/agent/token", "/settings/llm", "/download", "/logout")):
+        return RedirectResponse("/onboarding", status_code=302)
+
     return await call_next(request)
 
 
@@ -153,7 +157,7 @@ async def health_check():
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-from app.routers import auth, folders, meetings, chat, zoom, native_api  # noqa: E402
+from app.routers import auth, folders, meetings, chat, zoom, native_api, admin  # noqa: E402
 
 app.include_router(auth.router)
 app.include_router(folders.router)
@@ -162,3 +166,4 @@ app.include_router(chat.router)
 app.include_router(zoom.router)
 app.include_router(zoom._api)
 app.include_router(native_api.router)
+app.include_router(admin.router)

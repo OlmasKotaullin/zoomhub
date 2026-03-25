@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Поддержка — ZoomHub{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <h1 class="text-[22px] font-extrabold text-g-900">Поддержка</h1>
+
+  {% if sent %}
+  <div class="z-card p-4 border-l-4 border-ok bg-green-50/50">
+    <p class="text-[13px] font-semibold text-ok">Обращение отправлено</p>
+    <p class="text-[11px] text-g-500 mt-1">Мы рассмотрим вашу заявку и ответим как можно скорее.</p>
+  </div>
+  {% endif %}
+
+  <!-- New ticket form -->
+  <div class="z-card p-5">
+    <h2 class="text-[15px] font-bold text-g-800 mb-4">Новое обращение</h2>
+    <form action="/support" method="POST" class="space-y-3">
+      <input name="subject" placeholder="Тема обращения" required
+        class="z-input w-full bg-g-50 px-3.5 py-2.5 text-sm placeholder-g-400">
+
+      <div class="flex gap-3">
+        <div class="flex-1">
+          <label class="text-[11px] font-semibold text-g-500 block mb-1">Категория</label>
+          <select name="category" class="z-input w-full bg-g-50 px-3 py-2 text-sm">
+            <option value="question">Вопрос</option>
+            <option value="bug">Баг / Ошибка</option>
+            <option value="suggestion">Предложение</option>
+          </select>
+        </div>
+        <div class="flex-1">
+          <label class="text-[11px] font-semibold text-g-500 block mb-1">Приоритет</label>
+          <select name="priority" class="z-input w-full bg-g-50 px-3 py-2 text-sm">
+            <option value="normal">Обычный</option>
+            <option value="important">Важный</option>
+            <option value="critical">Критический</option>
+          </select>
+        </div>
+      </div>
+
+      <textarea name="message" rows="5" required placeholder="Опишите проблему или вопрос подробно..."
+        class="z-input w-full bg-g-50 px-4 py-3 text-sm placeholder-g-400 resize-y leading-relaxed"></textarea>
+
+      <button type="submit" class="z-btn z-btn-primary px-6 py-2.5 text-[13px]">Отправить</button>
+    </form>
+  </div>
+
+  <!-- Ticket history -->
+  {% if tickets %}
+  <h2 class="text-[15px] font-bold text-g-800">Мои обращения</h2>
+  <div class="space-y-3">
+    {% for t in tickets %}
+    <div class="z-card p-4">
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-[13px] font-bold text-g-800">{{ t.subject }}</span>
+          {% if t.status == 'new' %}
+          <span class="text-[9px] font-bold text-zoom bg-zoom-light px-1.5 py-0.5 rounded-md">Новый</span>
+          {% elif t.status == 'in_progress' %}
+          <span class="text-[9px] font-bold text-warn bg-warn/10 px-1.5 py-0.5 rounded-md">В работе</span>
+          {% else %}
+          <span class="text-[9px] font-bold text-ok bg-green-50 px-1.5 py-0.5 rounded-md">Решён</span>
+          {% endif %}
+        </div>
+        <span class="text-[10px] text-g-400">{{ t.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+      </div>
+      <p class="text-[12px] text-g-600 whitespace-pre-wrap">{{ t.message }}</p>
+
+      {% if t.admin_reply %}
+      <div class="bg-zoom-light rounded-xl p-3 mt-3">
+        <p class="text-[10px] font-semibold text-zoom mb-1">Ответ поддержки:</p>
+        <p class="text-[12px] text-g-700 whitespace-pre-wrap">{{ t.admin_reply }}</p>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

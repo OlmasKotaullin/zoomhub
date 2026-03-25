@@ -7,12 +7,40 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 
 from app.database import SessionLocal
-from app.models import Meeting, MeetingStatus, Transcript, Summary
+from app.models import Meeting, MeetingStatus, Transcript, Summary, User
 from app.services.transcriber import transcribe_file
 from app.services.summarizer import generate_summary
 from app.services.notify import notify_user
 
 logger = logging.getLogger(__name__)
+
+# Map provider name → user model field
+_USER_KEY_FIELDS = {
+    "groq": "user_groq_api_key",
+    "gemini": "user_gemini_api_key",
+    "gigachat": "user_gigachat_auth_key",
+    "claude": "user_anthropic_api_key",
+}
+
+
+def _get_user_llm_config(meeting_id: int) -> tuple[str | None, str | None]:
+    """Returns (provider_name, api_key) for the user who owns the meeting."""
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting or not meeting.user_id:
+            return None, None
+        user = db.query(User).filter(User.id == meeting.user_id).first()
+        if not user:
+            return None, None
+        provider = getattr(user, "user_llm_provider", "auto") or "auto"
+        if provider == "auto":
+            return None, None  # auto-routing with global keys
+        key_field = _USER_KEY_FIELDS.get(provider)
+        api_key = getattr(user, key_field, None) if key_field else None
+        return provider, api_key
+    finally:
+        db.close()
 
 MAX_DB_RETRIES = 5
 DB_RETRY_DELAY = 2
@@ -151,12 +179,14 @@ async def process_meeting(meeting_id: int, download_url: str | None = None):
         except Exception as e:
             logger.warning(f"[{meeting_id}] Ошибка классификации: {e}")
 
-        # Шаг 3: Генерация конспекта через Claude
+        # Шаг 3: Генерация конспекта — используем LLM из настроек пользователя
         try:
             _update_status(meeting_id, MeetingStatus.summarizing)
-            logger.info(f"[{meeting_id}] Генерирую конспект...")
 
-            summary_data = await generate_summary(transcript_text)
+            user_provider, user_api_key = _get_user_llm_config(meeting_id)
+            logger.info(f"[{meeting_id}] Генерирую конспект через {user_provider or 'auto'} (user_key={'yes' if user_api_key else 'global'})...")
+
+            summary_data = await generate_summary(transcript_text, provider_name=user_provider, api_key=user_api_key)
 
             _save_summary(meeting_id, summary_data)
 
@@ -199,11 +229,12 @@ async def process_meeting_transcript_only(meeting_id: int):
         except Exception as e:
             logger.warning(f"[{meeting_id}] Ошибка классификации: {e}")
 
-        # Генерация саммари
+        # Генерация саммари — используем LLM из настроек пользователя
         try:
             _update_status(meeting_id, MeetingStatus.summarizing)
-            logger.info(f"[{meeting_id}] Генерирую конспект (transcript-only)...")
-            summary_data = await generate_summary(transcript_text)
+            user_provider, user_api_key = _get_user_llm_config(meeting_id)
+            logger.info(f"[{meeting_id}] Генерирую конспект (transcript-only) через {user_provider or 'auto'}...")
+            summary_data = await generate_summary(transcript_text, provider_name=user_provider, api_key=user_api_key)
             _save_summary(meeting_id, summary_data)
         except Exception as e:
             logger.warning(f"[{meeting_id}] Ошибка конспекта: {e}")

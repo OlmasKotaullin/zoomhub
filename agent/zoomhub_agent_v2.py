@@ -56,6 +56,13 @@ def save_state(state_path: Path, hashes: set):
     state_path.write_text(json.dumps(list(hashes)))
 
 
+def _extract_zoom_id(filename: str) -> str | None:
+    """Extract Zoom meeting ID from filename like 'audio1282806098.m4a' or 'video1282806098.mp4'."""
+    import re
+    m = re.match(r'^(?:audio|video)(\d{5,})', filename)
+    return m.group(1) if m else None
+
+
 def find_new_files(folder: Path, processed: set, since_ts: float = 0) -> list[Path]:
     files = []
     if not folder.exists():
@@ -70,7 +77,26 @@ def find_new_files(folder: Path, processed: set, since_ts: float = 0) -> list[Pa
                         files.append(f)
         except PermissionError:
             continue
-    return sorted(files, key=lambda f: f.stat().st_mtime)
+
+    # Dedup: if both audio123 and video123 exist, keep only audio (smaller file)
+    seen_zoom_ids: dict[str, Path] = {}
+    deduped = []
+    for f in files:
+        zoom_id = _extract_zoom_id(f.name)
+        if zoom_id:
+            if zoom_id in seen_zoom_ids:
+                # Prefer audio over video (smaller, faster to process)
+                existing = seen_zoom_ids[zoom_id]
+                if f.name.startswith("audio") and existing.name.startswith("video"):
+                    seen_zoom_ids[zoom_id] = f
+                # else keep existing
+            else:
+                seen_zoom_ids[zoom_id] = f
+        else:
+            deduped.append(f)
+
+    deduped.extend(seen_zoom_ids.values())
+    return sorted(deduped, key=lambda f: f.stat().st_mtime)
 
 
 def is_stable(path: Path) -> bool:
