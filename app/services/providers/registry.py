@@ -30,11 +30,6 @@ def _make_groq() -> LLMProvider:
     return GroqProvider()
 
 
-def _make_gigachat() -> LLMProvider:
-    from app.services.providers.gigachat_provider import GigaChatProvider
-    return GigaChatProvider()
-
-
 def get_llm_provider() -> LLMProvider:
     """Возвращает текущий LLM-провайдер (singleton, пересоздаётся при смене)."""
     global _llm_instance
@@ -52,8 +47,6 @@ def get_llm_provider() -> LLMProvider:
         _llm_instance = _make_gemini()
     elif LLM_PROVIDER == "groq":
         _llm_instance = _make_groq()
-    elif LLM_PROVIDER == "gigachat":
-        _llm_instance = _make_gigachat()
     elif LLM_PROVIDER == "auto":
         _llm_instance = _make_groq()  # default для auto — бесплатный Groq
     else:
@@ -81,8 +74,6 @@ def get_provider_for_text(text_length: int) -> LLMProvider:
         provider = _make_gemini()
     elif LLM_PROVIDER == "groq":
         provider = _make_groq()
-    elif LLM_PROVIDER == "gigachat":
-        provider = _make_gigachat()
     elif LLM_PROVIDER == "auto":
         if GROQ_API_KEY:
             provider = _make_groq()
@@ -138,36 +129,27 @@ def reset_transcription_provider():
     _transcription_instance = None
 
 
-def make_provider_by_name(name: str, api_key: str | None = None) -> LLMProvider:
-    """Создаёт LLM-провайдер по имени с опциональным пользовательским ключом."""
-    if name == "groq":
-        from app.services.providers.groq_provider import GroqProvider
-        return GroqProvider(api_key=api_key)
-    elif name == "gemini":
-        from app.services.providers.gemini_provider import GeminiProvider
-        return GeminiProvider(api_key=api_key)
-    elif name == "gigachat":
-        from app.services.providers.gigachat_provider import GigaChatProvider
-        return GigaChatProvider(api_key=api_key)
-    elif name == "claude":
-        from app.services.providers.claude_provider import ClaudeProvider
-        return ClaudeProvider(api_key=api_key)
-    elif name == "ollama":
-        return _make_ollama()
-    else:
+def make_provider_by_name(name: str) -> LLMProvider:
+    """Создаёт LLM-провайдер по имени (без кэширования)."""
+    factories = {
+        "groq": _make_groq,
+        "gemini": _make_gemini,
+        "claude": _make_claude,
+        "ollama": _make_ollama,
+    }
+    factory = factories.get(name)
+    if not factory:
         raise ValueError(f"Неизвестный провайдер: {name}")
+    return factory()
 
 
 def get_available_providers() -> list[dict]:
     """Возвращает список провайдеров с информацией о доступности."""
     from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
 
-    from app.config import GIGACHAT_AUTH_KEY
-
     return [
         {"name": "groq", "label": "Groq (Llama 3.3 70B)", "available": bool(GROQ_API_KEY)},
-        {"name": "gemini", "label": "Gemini 2.5 Flash", "available": bool(GOOGLE_AI_API_KEY)},
-        {"name": "gigachat", "label": "GigaChat (Сбер)", "available": bool(GIGACHAT_AUTH_KEY)},
+        {"name": "gemini", "label": "Gemini Flash", "available": bool(GOOGLE_AI_API_KEY)},
         {"name": "claude", "label": "Claude Sonnet", "available": bool(ANTHROPIC_API_KEY)},
-        {"name": "ollama", "label": "Ollama (локальный)", "available": False},
+        {"name": "ollama", "label": "Ollama (локальный)", "available": False},  # нет на сервере
     ]

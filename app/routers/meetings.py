@@ -180,7 +180,7 @@ async def add_text_meeting(
     return RedirectResponse("/", status_code=303)
 
 
-async def _generate_summary_for_meeting(meeting_id: int, provider_name: str | None = None, api_key: str | None = None):
+async def _generate_summary_for_meeting(meeting_id: int, provider_name: str | None = None):
     """Фоновая генерация саммари для встречи."""
     from app.database import SessionLocal
     from app.services.summarizer import generate_summary
@@ -191,20 +191,11 @@ async def _generate_summary_for_meeting(meeting_id: int, provider_name: str | No
         if not meeting or not meeting.transcript:
             return
 
-        # Если ключ не передан явно — берём из настроек пользователя
-        if not api_key and meeting.user_id:
-            from app.models import User
-            user = db.query(User).filter(User.id == meeting.user_id).first()
-            if user and provider_name:
-                _fields = {"groq": "user_groq_api_key", "gemini": "user_gemini_api_key",
-                           "gigachat": "user_gigachat_auth_key", "claude": "user_anthropic_api_key"}
-                api_key = getattr(user, _fields.get(provider_name, ""), None)
-
         meeting.status = MeetingStatus.summarizing
         db.commit()
 
         try:
-            summary_data = await generate_summary(meeting.transcript.full_text, provider_name=provider_name, api_key=api_key)
+            summary_data = await generate_summary(meeting.transcript.full_text, provider_name=provider_name)
 
             # Обновляем существующий или создаём новый
             existing = db.query(Summary).filter(Summary.meeting_id == meeting.id).first()
@@ -246,7 +237,7 @@ async def meeting_detail(
     meeting = get_user_meeting(meeting_id, user, db)
     folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
 
-    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY, GIGACHAT_AUTH_KEY
+    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
 
     return templates.TemplateResponse("meeting.html", {
         "request": request,
@@ -255,7 +246,6 @@ async def meeting_detail(
         "folders": folders,
         "groq_available": bool(GROQ_API_KEY),
         "gemini_available": bool(GOOGLE_AI_API_KEY),
-        "gigachat_available": bool(GIGACHAT_AUTH_KEY),
         "claude_available": bool(ANTHROPIC_API_KEY),
         "ollama_available": False,
     })

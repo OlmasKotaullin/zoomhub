@@ -81,34 +81,3 @@ async def _send_email(email: str, subject: str, body: str):
         logger.info(f"Email sent to {email}")
     except Exception as e:
         logger.error(f"Email send error: {e}")
-
-
-async def send_password_reset_email(email: str, reset_url: str) -> bool:
-    """Send password reset email. Returns True if sent successfully."""
-    try:
-        import aiosmtplib
-        from email.message import EmailMessage
-        from app.config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
-
-        if not SMTP_HOST:
-            logger.warning("SMTP not configured — cannot send reset email")
-            return False
-
-        msg = EmailMessage()
-        msg["From"] = SMTP_USER
-        msg["To"] = email
-        msg["Subject"] = "ZoomHub: Сброс пароля"
-        msg.set_content(
-            f"Вы запросили сброс пароля в ZoomHub.\n\n"
-            f"Перейдите по ссылке для установки нового пароля:\n{reset_url}\n\n"
-            f"Ссылка действительна 1 час.\n\n"
-            f"Если вы не запрашивали сброс пароля, проигнорируйте это письмо."
-        )
-
-        await aiosmtplib.send(msg, hostname=SMTP_HOST, port=SMTP_PORT,
-                              username=SMTP_USER, password=SMTP_PASSWORD, use_tls=True)
-        logger.info(f"Password reset email sent to {email}")
-        return True
-    except Exception as e:
-        logger.error(f"Password reset email error: {e}")
-        return False

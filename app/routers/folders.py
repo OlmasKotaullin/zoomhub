@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.database import get_db
 from app.deps import templates, get_current_user_optional, get_user_folder
-from app.models import Folder, Meeting, SupportTicket
+from app.models import Folder, Meeting
 from app.config import (
     ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_ACCOUNT_ID,
     TELEGRAM_API_ID, TELEGRAM_API_HASH, BUKVITSA_BOT_USERNAME,
@@ -41,8 +41,6 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
     except Exception:
         trans_ok = False
 
-    user_provider = getattr(user, "user_llm_provider", "auto") or "auto"
-
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user": user,
@@ -52,60 +50,30 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "telegram_ok": bool(TELEGRAM_API_ID and TELEGRAM_API_HASH and session_exists),
         "bukvitsa_username": BUKVITSA_BOT_USERNAME,
         "claude_ok": bool(ANTHROPIC_API_KEY),
-        "llm_provider": user_provider,
+        "llm_provider": config_module.LLM_PROVIDER,
         "llm_ok": llm_ok,
         "ollama_model": config_module.OLLAMA_MODEL,
         "transcription_provider": config_module.TRANSCRIPTION_PROVIDER,
         "transcription_ok": trans_ok,
         "whisper_model": config_module.WHISPER_MODEL,
-        "has_groq_key": bool(getattr(user, "user_groq_api_key", None)),
-        "has_gemini_key": bool(getattr(user, "user_gemini_api_key", None)),
-        "has_gigachat_key": bool(getattr(user, "user_gigachat_auth_key", None)),
-        "has_anthropic_key": bool(getattr(user, "user_anthropic_api_key", None)),
     })
 
 
 @router.post("/settings/llm-provider")
 async def switch_llm_provider(request: Request, provider: str = Form(...), db: Session = Depends(get_db)):
-    """Переключает LLM-провайдер для текущего пользователя."""
+    """Переключает LLM-провайдер (claude / ollama)."""
     user = get_current_user_optional(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    if provider not in ("claude", "ollama", "gemini", "groq", "gigachat", "auto"):
+    if provider not in ("claude", "ollama", "gemini", "groq", "auto"):
         raise HTTPException(status_code=400, detail="Неизвестный провайдер")
 
-    user.user_llm_provider = provider
-    db.commit()
+    config_module.LLM_PROVIDER = provider
+    from app.services.providers.registry import reset_llm_provider
+    reset_llm_provider()
 
     return {"status": "ok", "provider": provider}
-
-
-@router.post("/settings/api-keys")
-async def save_api_keys(
-    request: Request,
-    groq_key: str = Form(""),
-    gemini_key: str = Form(""),
-    gigachat_key: str = Form(""),
-    anthropic_key: str = Form(""),
-    db: Session = Depends(get_db),
-):
-    """Сохраняет персональные API-ключи пользователя."""
-    user = get_current_user_optional(request, db)
-    if not user:
-        return RedirectResponse("/login", status_code=302)
-
-    if groq_key.strip():
-        user.user_groq_api_key = groq_key.strip()
-    if gemini_key.strip():
-        user.user_gemini_api_key = gemini_key.strip()
-    if gigachat_key.strip():
-        user.user_gigachat_auth_key = gigachat_key.strip()
-    if anthropic_key.strip():
-        user.user_anthropic_api_key = anthropic_key.strip()
-    db.commit()
-
-    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/settings/transcription-provider")
@@ -166,19 +134,6 @@ async def onboarding_complete(request: Request, db: Session = Depends(get_db)):
     user.onboarding_completed = True
     db.commit()
     return RedirectResponse("/", status_code=302)
-
-
-@router.get("/download/{platform}")
-async def download_agent(platform: str):
-    """Прокси-ссылка на скачивание агента с GitHub Releases."""
-    urls = {
-        "mac": "https://github.com/OlmasKotaullin/zoomhub/releases/latest/download/ZoomHubAgent-mac.zip",
-        "win": "https://github.com/OlmasKotaullin/zoomhub/releases/latest/download/ZoomHubAgent-win.exe",
-    }
-    url = urls.get(platform)
-    if not url:
-        return RedirectResponse("/onboarding", status_code=302)
-    return RedirectResponse(url, status_code=302)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -322,54 +277,3 @@ async def folder_detail(
         "meetings": meetings,
         "folders": folders,
     })
-
-
-# ---- Support tickets (client side) ----
-
-@router.get("/support", response_class=HTMLResponse)
-async def support_page(request: Request, sent: str = "", db: Session = Depends(get_db)):
-    user = get_current_user_optional(request, db)
-    if not user:
-        return RedirectResponse("/login", status_code=302)
-
-    tickets = (
-        db.query(SupportTicket)
-        .filter(SupportTicket.user_id == user.id)
-        .order_by(SupportTicket.created_at.desc())
-        .all()
-    )
-    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
-
-    return templates.TemplateResponse("support.html", {
-        "request": request,
-        "user": user,
-        "tickets": tickets,
-        "folders": folders,
-        "sent": bool(sent),
-    })
-
-
-@router.post("/support", response_class=HTMLResponse)
-async def create_ticket(
-    request: Request,
-    subject: str = Form(...),
-    message: str = Form(...),
-    category: str = Form("question"),
-    priority: str = Form("normal"),
-    db: Session = Depends(get_db),
-):
-    user = get_current_user_optional(request, db)
-    if not user:
-        return RedirectResponse("/login", status_code=302)
-
-    ticket = SupportTicket(
-        user_id=user.id,
-        subject=subject,
-        message=message,
-        category=category if category in ("bug", "question", "suggestion") else "question",
-        priority=priority if priority in ("normal", "important", "critical") else "normal",
-    )
-    db.add(ticket)
-    db.commit()
-
-    return RedirectResponse("/support?sent=1", status_code=303)

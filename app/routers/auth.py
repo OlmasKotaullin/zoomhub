@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import create_token, hash_password, verify_password
 from app.database import get_db
 from app.deps import templates
-from app.models import User, InviteCode, PasswordReset
+from app.models import User, InviteCode
 from app.oauth import oauth, get_available_providers
 
 router = APIRouter(tags=["auth"])
@@ -125,98 +125,6 @@ async def register(
     db.commit()
     db.refresh(user)
     return _login_response(user.id, redirect_to="/onboarding")
-
-
-@router.get("/forgot-password", response_class=HTMLResponse)
-async def forgot_password_page(request: Request):
-    return templates.TemplateResponse("forgot_password.html", {"request": request, "error": None, "sent": False})
-
-
-@router.post("/forgot-password", response_class=HTMLResponse)
-async def forgot_password(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
-    from datetime import datetime, timezone, timedelta
-    from app.services.notify import send_password_reset_email
-
-    # Always show "sent" to prevent email enumeration
-    user = db.query(User).filter(User.email == email).first()
-    if user:
-        token = secrets.token_urlsafe(32)
-        reset = PasswordReset(
-            user_id=user.id,
-            token=token,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        )
-        db.add(reset)
-        db.commit()
-
-        # Build reset URL
-        base_url = str(request.base_url).rstrip("/")
-        if base_url.startswith("http://") and "localhost" not in base_url:
-            base_url = base_url.replace("http://", "https://", 1)
-        reset_url = f"{base_url}/reset-password?token={token}"
-
-        sent = await send_password_reset_email(email, reset_url)
-        if not sent:
-            return templates.TemplateResponse("forgot_password.html", {
-                "request": request, "error": "Сервис отправки почты временно недоступен. Обратитесь к администратору.", "sent": False,
-            })
-
-    return templates.TemplateResponse("forgot_password.html", {"request": request, "error": None, "sent": True})
-
-
-@router.get("/reset-password", response_class=HTMLResponse)
-async def reset_password_page(request: Request, token: str = "", db: Session = Depends(get_db)):
-    from datetime import datetime, timezone
-
-    reset = db.query(PasswordReset).filter(
-        PasswordReset.token == token, PasswordReset.used == False,
-    ).first()
-
-    if not reset or reset.expires_at < datetime.now(timezone.utc):
-        return templates.TemplateResponse("reset_password.html", {
-            "request": request, "error": "Ссылка недействительна или устарела.", "token": "", "valid": False,
-        })
-
-    return templates.TemplateResponse("reset_password.html", {
-        "request": request, "error": None, "token": token, "valid": True,
-    })
-
-
-@router.post("/reset-password", response_class=HTMLResponse)
-async def reset_password(
-    request: Request,
-    token: str = Form(...),
-    password: str = Form(...),
-    password_confirm: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    from datetime import datetime, timezone
-
-    reset = db.query(PasswordReset).filter(
-        PasswordReset.token == token, PasswordReset.used == False,
-    ).first()
-
-    if not reset or reset.expires_at < datetime.now(timezone.utc):
-        return templates.TemplateResponse("reset_password.html", {
-            "request": request, "error": "Ссылка недействительна или устарела.", "token": "", "valid": False,
-        })
-
-    if password != password_confirm:
-        return templates.TemplateResponse("reset_password.html", {
-            "request": request, "error": "Пароли не совпадают.", "token": token, "valid": True,
-        })
-    if len(password) < 6:
-        return templates.TemplateResponse("reset_password.html", {
-            "request": request, "error": "Пароль должен быть не менее 6 символов.", "token": token, "valid": True,
-        })
-
-    user = db.query(User).filter(User.id == reset.user_id).first()
-    if user:
-        user.hashed_password = hash_password(password)
-        reset.used = True
-        db.commit()
-
-    return RedirectResponse("/login", status_code=302)
 
 
 @router.get("/logout")
@@ -354,18 +262,12 @@ async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
     from app.config import TELEGRAM_BOT_TOKEN
     from app.auth import decode_token
 
-    import logging
-    _log = logging.getLogger("app.telegram")
-
     body = await request.json()
-    _log.info(f"Webhook received: {body}")
-
     message = body.get("message", {})
     text = message.get("text", "")
     chat_id = str(message.get("chat", {}).get("id", ""))
 
     if not chat_id:
-        _log.warning("No chat_id in webhook")
         return {"ok": True}
 
     if text.startswith("/start"):

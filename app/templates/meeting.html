@@ -25,8 +25,7 @@
         <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Выбери LLM</p>
         {% set providers = [
           ("groq", "Groq · Llama 3.3 70B", groq_available),
-          ("gemini", "Gemini 2.5 Flash", gemini_available),
-          ("gigachat", "GigaChat (Сбер)", gigachat_available),
+          ("gemini", "Gemini Flash", gemini_available),
           ("claude", "Claude Sonnet", claude_available),
           ("ollama", "Ollama (локальный)", ollama_available),
         ] %}
@@ -184,12 +183,6 @@
         class="z-input flex-1 bg-g-50 px-3.5 py-2.5 text-[13px] placeholder-g-400">
       <button type="submit" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Отправить</button>
     </form>
-    <div class="mt-3 text-center">
-      <a href="/chat?meeting_id={{ meeting.id }}{% if meeting.folder_id %}&folder_id={{ meeting.folder_id }}{% endif %}"
-        class="text-[11px] text-ai hover:text-ai-gradient transition font-medium">
-        Открыть в полном чате (с потоковым выводом) &rarr;
-      </a>
-    </div>
   </div>
 </div>
 

@@ -84,31 +84,6 @@ def init_db():
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code_id INTEGER",
                 ]
 
-            if "is_admin" not in user_cols:
-                migrations += [
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE",
-                    "UPDATE users SET is_admin = TRUE WHERE email = 'annggeellooss@gmail.com'",
-                ]
-
-            if "user_groq_api_key" not in user_cols:
-                migrations += [
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_groq_api_key VARCHAR(500)",
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_gemini_api_key VARCHAR(500)",
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_gigachat_auth_key VARCHAR(1000)",
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_anthropic_api_key VARCHAR(500)",
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_llm_provider VARCHAR(50) DEFAULT 'auto'",
-                ]
-
-            # Chat system: session_id and tokens_used on chat_messages
-            # Note: chat_sessions table is created by create_all() above, so FK is safe
-            if insp.has_table("chat_messages") and insp.has_table("chat_sessions"):
-                chat_cols = {col["name"] for col in insp.get_columns("chat_messages")}
-                if "session_id" not in chat_cols:
-                    migrations += [
-                        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id INTEGER REFERENCES chat_sessions(id)",
-                        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS tokens_used INTEGER",
-                    ]
-
             for sql in migrations:
                 c.execute(text(sql))
             if migrations:

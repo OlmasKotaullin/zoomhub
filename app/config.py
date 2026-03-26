@@ -40,7 +40,6 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_AI_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GIGACHAT_AUTH_KEY = os.environ.get("GIGACHAT_AUTH_KEY", "")
 
 TELEGRAM_API_ID = int(os.environ.get("TELEGRAM_API_ID") or "0")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
