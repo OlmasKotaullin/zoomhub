@@ -215,12 +215,25 @@ async def chat_page(
     sessions = sessions_query.order_by(ChatSession.updated_at.desc()).limit(50).all()
 
     role_name = ""
+    role_prompt = ""
+    folder_name = ""
     if folder_id:
         role = db.query(FolderRole).filter(
             FolderRole.folder_id == folder_id, FolderRole.user_id == user.id
         ).first()
         if role:
             role_name = role.name
+            role_prompt = role.system_prompt or ""
+        folder_obj = db.query(Folder).filter(Folder.id == folder_id).first()
+        if folder_obj:
+            folder_name = f"{folder_obj.icon} {folder_obj.name}"
+
+    # Meeting name for context
+    meeting_name = ""
+    if meeting_id:
+        meeting_obj = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if meeting_obj:
+            meeting_name = meeting_obj.title
 
     user_provider = user.user_llm_provider or "auto"
 
@@ -236,6 +249,9 @@ async def chat_page(
         "providers": providers,
         "user_provider": user_provider,
         "role_name": role_name,
+        "role_prompt": role_prompt,
+        "folder_name": folder_name,
+        "meeting_name": meeting_name,
     })
 
 
