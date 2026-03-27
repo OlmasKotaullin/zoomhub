@@ -80,7 +80,7 @@
           <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
             <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
             {% for m in meetings %}
-            <button onclick="selectMeeting({{ m.id }}, '{{ m.title|truncate(40) }}')" class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
+            <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
               📅 {{ m.title|truncate(45) }}
             </button>
             {% endfor %}
@@ -88,7 +88,7 @@
             <div class="border-t border-g-100 my-1"></div>
             <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Папки</p>
             {% for f in folders %}
-            <button onclick="selectFolder({{ f.id }}, '{{ f.icon }} {{ f.name }}')" class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
+            <button onclick='selectFolder({{ f.id }}, {{ (f.icon ~ " " ~ f.name)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
               {{ f.icon }} {{ f.name }}
             </button>
             {% endfor %}
@@ -114,7 +114,7 @@
   <!-- Карточки шаблонов -->
   <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-6">
     {% for key, t in chat_templates.items() %}
-    <button onclick="selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})"
+    <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
       class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
       <div class="flex items-center gap-2 mb-1.5">
         <span class="text-[16px]">{{ t.icon }}</span>
