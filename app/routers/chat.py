@@ -326,33 +326,36 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     template_key = body.get("template")
 
     if not message:
-        return StreamingResponse(
-            iter([f"data: {json.dumps({'error': 'Пустое сообщение'})}\n\n"]),
-            media_type="text/event-stream",
-        )
+        async def empty_error():
+            yield f"data: {json.dumps({'error': 'Пустое сообщение'})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+        return StreamingResponse(empty_error(), media_type="text/event-stream")
+
+    # Validate IDs
+    try:
+        mid = int(meeting_id) if meeting_id else None
+        fid = int(folder_id) if folder_id else None
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Неверный meeting_id или folder_id")
 
     # System prompt: шаблон или дефолт
     if template_key and template_key in CHAT_TEMPLATES:
         system = CHAT_TEMPLATES[template_key]["system"]
-    elif meeting_id:
+    elif mid:
         system = MEETING_SYSTEM
-    elif folder_id:
+    elif fid:
         system = FOLDER_SYSTEM
     else:
         system = MEETING_SYSTEM
 
-    # Контекст
+    # Контекст (с проверкой владельца)
     context = ""
-    if meeting_id:
-        meeting = db.query(Meeting).filter(
-            Meeting.id == int(meeting_id), Meeting.user_id == user.id
-        ).first()
+    if mid:
+        meeting = db.query(Meeting).filter(Meeting.id == mid, Meeting.user_id == user.id).first()
         if meeting:
             context = _build_meeting_context(meeting)
-    elif folder_id:
-        folder = db.query(Folder).filter(
-            Folder.id == int(folder_id), Folder.user_id == user.id
-        ).first()
+    elif fid:
+        folder = db.query(Folder).filter(Folder.id == fid, Folder.user_id == user.id).first()
         if folder:
             parts = [f"**Проект:** {folder.name}\n**Встреч:** {len(folder.meetings)}"]
             for m in folder.meetings:
@@ -364,6 +367,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
                 elif m.transcript:
                     info += f"\n{m.transcript.full_text[:3000]}"
                 parts.append(info)
+                if len("\n".join(parts)) > 100000:
+                    break
             context = "\n".join(parts)[:100000]
 
     # LLM messages
@@ -373,10 +378,10 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
         llm_messages.append({"role": "assistant", "content": "Я изучил материалы. Задавайте вопросы."})
 
     # История
-    if meeting_id:
-        history = db.query(ChatMessage).filter(ChatMessage.meeting_id == int(meeting_id)).order_by(ChatMessage.created_at).all()
-    elif folder_id:
-        history = db.query(ChatMessage).filter(ChatMessage.folder_id == int(folder_id)).order_by(ChatMessage.created_at).all()
+    if mid:
+        history = db.query(ChatMessage).filter(ChatMessage.meeting_id == mid).order_by(ChatMessage.created_at).all()
+    elif fid:
+        history = db.query(ChatMessage).filter(ChatMessage.folder_id == fid).order_by(ChatMessage.created_at).all()
     else:
         history = []
 
@@ -387,16 +392,12 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     llm_messages.append({"role": "user", "content": message})
 
     # Сохраняем user message
-    user_msg = ChatMessage(
-        meeting_id=int(meeting_id) if meeting_id else None,
-        folder_id=int(folder_id) if folder_id else None,
-        role=ChatRole.user,
-        content=message,
-    )
+    user_msg = ChatMessage(meeting_id=mid, folder_id=fid, role=ChatRole.user, content=message)
     db.add(user_msg)
     db.commit()
 
     provider = get_provider_for_text(len(context))
+    logger.info(f"Chat stream: user={user.id}, meeting={mid}, folder={fid}, provider={provider.name}, template={template_key}")
 
     async def event_stream():
         full_response = ""
@@ -408,18 +409,22 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
             logger.error(f"Stream error ({provider.name}): {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        # Сохраняем ответ
+        # Сохраняем ответ в отдельной сессии БД (stream может пережить основную)
+        from app.database import SessionLocal
+        save_db = SessionLocal()
         try:
             assistant_msg = ChatMessage(
-                meeting_id=int(meeting_id) if meeting_id else None,
-                folder_id=int(folder_id) if folder_id else None,
+                meeting_id=mid, folder_id=fid,
                 role=ChatRole.assistant,
                 content=full_response or "Ошибка генерации",
             )
-            db.add(assistant_msg)
-            db.commit()
+            save_db.add(assistant_msg)
+            save_db.commit()
         except Exception as e:
-            logger.error(f"Ошибка сохранения: {e}")
+            logger.error(f"Ошибка сохранения ответа: {e}")
+            save_db.rollback()
+        finally:
+            save_db.close()
 
         yield f"data: {json.dumps({'done': True})}\n\n"
 

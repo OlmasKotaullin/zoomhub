@@ -114,7 +114,7 @@
   <!-- Карточки шаблонов -->
   <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-6">
     {% for key, t in chat_templates.items() %}
-    <button onclick="selectTemplate('{{ key }}', '{{ t.name }}', '{{ t.prompt }}')"
+    <button onclick="selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})"
       class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
       <div class="flex items-center gap-2 mb-1.5">
         <span class="text-[16px]">{{ t.icon }}</span>
@@ -275,12 +275,12 @@ async function sendMessage() {
               window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
             }, 50);
           }
-        } catch (e) {}
+        } catch (e) { console.warn('SSE parse:', e); }
       }
     }
 
     // Final render
-    if (typeof marked !== 'undefined') {
+    if (typeof marked !== 'undefined' && fullResponseText) {
       contentEl.innerHTML = marked.parse(fullResponseText);
     }
 

@@ -306,7 +306,7 @@ async function sendMeetingChat() {
               msgs.scrollTop = msgs.scrollHeight;
             }, 50);
           }
-        } catch(e) {}
+        } catch(e) { console.warn('SSE parse:', e); }
       }
     }
     if (typeof marked !== 'undefined') el.innerHTML = marked.parse(meetingStreamText);
