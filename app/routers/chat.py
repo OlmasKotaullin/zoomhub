@@ -407,33 +407,31 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
 
     async def event_stream():
         full_response = ""
-        current_provider = provider
-        try:
-            async for chunk in current_provider.generate_stream(llm_messages, system=system, max_tokens=4096):
-                full_response += chunk
-                yield f"data: {json.dumps({'content': chunk})}\n\n"
-        except Exception as e:
-            logger.warning(f"Stream error ({current_provider.name}): {e}, trying fallback...")
-            # Fallback: Groq 429 → Gemini → Claude
-            from app.services.providers.registry import make_provider_by_name
-            from app.config import GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
-            fallback = None
-            if current_provider.name == "groq" and GOOGLE_AI_API_KEY:
-                fallback = make_provider_by_name("gemini")
-            elif current_provider.name in ("groq", "gemini") and ANTHROPIC_API_KEY:
-                fallback = make_provider_by_name("claude")
+        # Цепочка провайдеров: основной → Gemini → Claude
+        from app.services.providers.registry import make_provider_by_name
+        from app.config import GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
+        providers_chain = [provider]
+        if provider.name != "gemini" and GOOGLE_AI_API_KEY:
+            providers_chain.append(make_provider_by_name("gemini"))
+        if provider.name != "claude" and ANTHROPIC_API_KEY:
+            providers_chain.append(make_provider_by_name("claude"))
 
-            if fallback:
-                logger.info(f"Fallback to {fallback.name}")
-                try:
-                    async for chunk in fallback.generate_stream(llm_messages, system=system, max_tokens=4096):
-                        full_response += chunk
-                        yield f"data: {json.dumps({'content': chunk})}\n\n"
-                except Exception as e2:
-                    logger.error(f"Fallback ({fallback.name}) also failed: {e2}")
-                    yield f"data: {json.dumps({'error': str(e2)})}\n\n"
-            else:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        last_error = None
+        for p in providers_chain:
+            try:
+                logger.info(f"Trying provider: {p.name}")
+                async for chunk in p.generate_stream(llm_messages, system=system, max_tokens=4096):
+                    full_response += chunk
+                    yield f"data: {json.dumps({'content': chunk})}\n\n"
+                last_error = None
+                break  # успех — выходим из цикла
+            except Exception as e:
+                logger.warning(f"Provider {p.name} failed: {e}")
+                last_error = e
+                continue  # пробуем следующий
+
+        if last_error:
+            yield f"data: {json.dumps({'error': 'Все провайдеры недоступны. Попробуйте позже.'})}\n\n"
 
         # Сохраняем ответ в отдельной сессии БД (stream может пережить основную)
         from app.database import SessionLocal
