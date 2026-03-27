@@ -66,6 +66,10 @@ class GeminiProvider(LLMProvider):
                 if not candidates:
                     raise RuntimeError(f"Gemini вернул пустой ответ: {data}")
 
+                finish_reason = candidates[0].get("finishReason", "")
+                if finish_reason == "MAX_TOKENS":
+                    logger.warning(f"Gemini ответ обрезан (MAX_TOKENS, max_tokens={max_tokens})")
+
                 parts = candidates[0].get("content", {}).get("parts", [])
                 return parts[0].get("text", "") if parts else ""
 

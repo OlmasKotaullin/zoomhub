@@ -78,7 +78,7 @@ async def generate_summary(transcript_text: str, provider_name: str | None = Non
                 ],
                 system=SYSTEM_PROMPT,
                 json_mode=True,
-                max_tokens=4096,
+                max_tokens=8192,
             )
             result = _parse_summary(raw_response)
             if result.get("tldr"):
@@ -94,6 +94,8 @@ async def generate_summary(transcript_text: str, provider_name: str | None = Non
 
 def _parse_summary(raw_response: str) -> dict:
     """Парсит JSON-ответ LLM."""
+    import re
+
     try:
         text = raw_response.strip()
         if text.startswith("```"):
@@ -110,8 +112,18 @@ def _parse_summary(raw_response: str) -> dict:
         }
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning(f"Не удалось распарсить JSON: {e}")
+        # Попытка извлечь tldr из обрезанного JSON
+        tldr_match = re.search(r'"tldr"\s*:\s*"((?:[^"\\]|\\.)*)"', raw_response)
+        if tldr_match:
+            return {
+                "tldr": tldr_match.group(1),
+                "tasks": [],
+                "topics": [],
+                "insights": [],
+                "raw_response": raw_response,
+            }
         return {
-            "tldr": raw_response[:500],
+            "tldr": "",
             "tasks": [],
             "topics": [],
             "insights": [],
