@@ -59,6 +59,7 @@ class User(Base):
     name = Column(String(255), nullable=False)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utcnow)
 
     # Zoom OAuth (per-user)
@@ -162,3 +163,21 @@ class ChatMessage(Base):
 
     meeting = relationship("Meeting", back_populates="chat_messages")
     folder = relationship("Folder", back_populates="chat_messages")
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    subject = Column(String(500), nullable=False)
+    message = Column(Text, nullable=False)
+    category = Column(String(50), default="question")
+    priority = Column(String(50), default="normal")
+    status = Column(String(50), default="new")
+    is_read = Column(Boolean, default=False)
+    admin_reply = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    user = relationship("User")

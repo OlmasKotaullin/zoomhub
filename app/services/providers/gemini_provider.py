@@ -18,8 +18,8 @@ MODEL = "gemini-2.5-flash"
 class GeminiProvider(LLMProvider):
     name = "gemini"
 
-    def __init__(self):
-        self.api_key = GOOGLE_AI_API_KEY
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or GOOGLE_AI_API_KEY
 
     async def generate(self, messages: list[dict], system: str = "",
                        json_mode: bool = False, max_tokens: int = 4096) -> str:

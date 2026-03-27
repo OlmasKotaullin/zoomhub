@@ -402,19 +402,25 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     db.add(user_msg)
     db.commit()
 
+    from app.services.providers.registry import make_provider_by_name, get_user_keys
+    user_keys = get_user_keys(user)
     provider = get_provider_for_text(len(context))
+    # Если у пользователя есть свой ключ для этого провайдера — пересоздаём с ним
+    if user_keys.get(provider.name):
+        provider = make_provider_by_name(provider.name, user_keys=user_keys)
     logger.info(f"Chat stream: user={user.id}, meeting={mid}, folder={fid}, provider={provider.name}, template={template_key}")
 
     async def event_stream():
         full_response = ""
         # Цепочка провайдеров: основной → Gemini → Claude
-        from app.services.providers.registry import make_provider_by_name
         from app.config import GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
         providers_chain = [provider]
-        if provider.name != "gemini" and GOOGLE_AI_API_KEY:
-            providers_chain.append(make_provider_by_name("gemini"))
-        if provider.name != "claude" and ANTHROPIC_API_KEY:
-            providers_chain.append(make_provider_by_name("claude"))
+        has_gemini = user_keys.get("gemini") or GOOGLE_AI_API_KEY
+        has_claude = user_keys.get("claude") or ANTHROPIC_API_KEY
+        if provider.name != "gemini" and has_gemini:
+            providers_chain.append(make_provider_by_name("gemini", user_keys=user_keys))
+        if provider.name != "claude" and has_claude:
+            providers_chain.append(make_provider_by_name("claude", user_keys=user_keys))
 
         last_error = None
         for p in providers_chain:

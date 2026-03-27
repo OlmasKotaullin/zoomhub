@@ -10,24 +10,24 @@ _llm_instance: LLMProvider | None = None
 _transcription_instance: TranscriptionProvider | None = None
 
 
-def _make_ollama() -> LLMProvider:
+def _make_ollama(api_key: str | None = None) -> LLMProvider:
     from app.services.providers.ollama_provider import OllamaProvider
     return OllamaProvider()
 
 
-def _make_claude() -> LLMProvider:
+def _make_claude(api_key: str | None = None) -> LLMProvider:
     from app.services.providers.claude_provider import ClaudeProvider
-    return ClaudeProvider()
+    return ClaudeProvider(api_key=api_key)
 
 
-def _make_gemini() -> LLMProvider:
+def _make_gemini(api_key: str | None = None) -> LLMProvider:
     from app.services.providers.gemini_provider import GeminiProvider
-    return GeminiProvider()
+    return GeminiProvider(api_key=api_key)
 
 
-def _make_groq() -> LLMProvider:
+def _make_groq(api_key: str | None = None) -> LLMProvider:
     from app.services.providers.groq_provider import GroqProvider
-    return GroqProvider()
+    return GroqProvider(api_key=api_key)
 
 
 def get_llm_provider() -> LLMProvider:
@@ -129,8 +129,14 @@ def reset_transcription_provider():
     _transcription_instance = None
 
 
-def make_provider_by_name(name: str) -> LLMProvider:
-    """Создаёт LLM-провайдер по имени (без кэширования)."""
+def make_provider_by_name(name: str, user_keys: dict | None = None) -> LLMProvider:
+    """Создаёт LLM-провайдер по имени (без кэширования).
+
+    user_keys: {"groq": "gsk_...", "gemini": "AIza...", "anthropic": "sk-ant-...", "openai": "sk-..."}
+    """
+    key = (user_keys or {}).get(name) or (user_keys or {}).get(
+        {"claude": "anthropic"}.get(name, name)
+    )
     factories = {
         "groq": _make_groq,
         "gemini": _make_gemini,
@@ -140,7 +146,24 @@ def make_provider_by_name(name: str) -> LLMProvider:
     factory = factories.get(name)
     if not factory:
         raise ValueError(f"Неизвестный провайдер: {name}")
-    return factory()
+    return factory(api_key=key)
+
+
+def get_user_keys(user) -> dict:
+    """Извлекает пользовательские API-ключи из объекта User."""
+    if not user:
+        return {}
+    keys = {}
+    if getattr(user, "user_groq_api_key", None):
+        keys["groq"] = user.user_groq_api_key
+    if getattr(user, "user_gemini_api_key", None):
+        keys["gemini"] = user.user_gemini_api_key
+    if getattr(user, "user_anthropic_api_key", None):
+        keys["anthropic"] = user.user_anthropic_api_key
+        keys["claude"] = user.user_anthropic_api_key
+    if getattr(user, "user_openai_api_key", None):
+        keys["openai"] = user.user_openai_api_key
+    return keys
 
 
 def get_available_providers() -> list[dict]:

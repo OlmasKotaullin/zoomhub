@@ -153,7 +153,7 @@ async def health_check():
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-from app.routers import auth, folders, meetings, chat, zoom, native_api  # noqa: E402
+from app.routers import auth, folders, meetings, chat, zoom, native_api, admin  # noqa: E402
 
 app.include_router(auth.router)
 app.include_router(folders.router)
@@ -162,3 +162,4 @@ app.include_router(chat.router)
 app.include_router(zoom.router)
 app.include_router(zoom._api)
 app.include_router(native_api.router)
+app.include_router(admin.router)

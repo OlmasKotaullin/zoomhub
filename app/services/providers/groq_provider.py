@@ -18,8 +18,8 @@ MODEL = "llama-3.3-70b-versatile"  # 128K context, free tier
 class GroqProvider(LLMProvider):
     name = "groq"
 
-    def __init__(self):
-        self.api_key = GROQ_API_KEY
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or GROQ_API_KEY
 
     async def generate(self, messages: list[dict], system: str = "",
                        json_mode: bool = False, max_tokens: int = 4096) -> str:

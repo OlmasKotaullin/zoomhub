@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 class ClaudeProvider(LLMProvider):
     name = "claude"
 
-    def __init__(self):
-        self.api_key = ANTHROPIC_API_KEY
+    def __init__(self, api_key: str | None = None):
+        self.api_key = api_key or ANTHROPIC_API_KEY
         self.model = "claude-sonnet-4-20250514"
 
     async def generate(self, messages: list[dict], system: str = "",
