@@ -73,6 +73,11 @@ class User(Base):
     # Capture settings
     capture_source = Column(String(20), default="both")  # cloud | agent | both
     agent_api_token = Column(String(500), nullable=True)
+    # User API keys (per-user, override global .env)
+    user_groq_api_key = Column(String(500), nullable=True)
+    user_gemini_api_key = Column(String(500), nullable=True)
+    user_anthropic_api_key = Column(String(500), nullable=True)
+    user_openai_api_key = Column(String(500), nullable=True)
     # Onboarding
     onboarding_completed = Column(Boolean, default=False)
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)

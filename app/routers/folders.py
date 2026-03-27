@@ -93,6 +93,29 @@ async def switch_transcription_provider(request: Request, provider: str = Form(.
     return {"status": "ok", "provider": provider}
 
 
+@router.post("/settings/api-keys")
+async def save_api_keys(
+    request: Request,
+    groq_key: str = Form(""),
+    gemini_key: str = Form(""),
+    anthropic_key: str = Form(""),
+    openai_key: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Сохраняет пользовательские API-ключи."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return {"status": "error", "detail": "Не авторизован"}
+
+    user.user_groq_api_key = groq_key.strip() or None
+    user.user_gemini_api_key = gemini_key.strip() or None
+    user.user_anthropic_api_key = anthropic_key.strip() or None
+    user.user_openai_api_key = openai_key.strip() or None
+    db.commit()
+
+    return {"status": "ok"}
+
+
 @router.get("/settings/health/{provider_type}")
 async def check_provider_health(request: Request, provider_type: str, db: Session = Depends(get_db)):
     """Проверяет здоровье провайдера."""

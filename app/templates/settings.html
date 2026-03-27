@@ -64,6 +64,38 @@
     </div>
   </div>
 
+  <!-- API-ключи пользователя -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.06s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">🔑 API-ключи</h3>
+    </div>
+    <p class="text-[13px] text-g-500 mb-4">Укажите свои ключи для приоритетного доступа. Если не заполнены — используются общие.</p>
+    <form id="apiKeysForm" class="space-y-3">
+      <div>
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">Groq API Key <span class="text-g-400 font-normal">(бесплатно на groq.com)</span></label>
+        <input name="groq_key" type="password" value="{{ user.user_groq_api_key or '' }}" placeholder="gsk_..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+      </div>
+      <div>
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">Google AI API Key <span class="text-g-400 font-normal">(Gemini, бесплатно на aistudio.google.com)</span></label>
+        <input name="gemini_key" type="password" value="{{ user.user_gemini_api_key or '' }}" placeholder="AIza..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+      </div>
+      <div>
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">Anthropic API Key <span class="text-g-400 font-normal">(Claude, платный)</span></label>
+        <input name="anthropic_key" type="password" value="{{ user.user_anthropic_api_key or '' }}" placeholder="sk-ant-..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+      </div>
+      <div>
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">OpenAI API Key <span class="text-g-400 font-normal">(Whisper транскрипция, платный)</span></label>
+        <input name="openai_key" type="password" value="{{ user.user_openai_api_key or '' }}" placeholder="sk-..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+      </div>
+      <button type="submit" class="z-btn z-btn-primary px-5 py-2 text-[12px]">Сохранить ключи</button>
+      <span id="keySaveStatus" class="text-[12px] text-ok ml-2 hidden">Сохранено!</span>
+    </form>
+  </div>
+
   <!-- Транскрипция-провайдер -->
   <div class="z-card p-5 anim-up" style="animation-delay:0.08s">
     <div class="flex items-center justify-between mb-3">
@@ -205,6 +237,22 @@ function getTelegramLink() {
     }
   });
 }
+
+document.getElementById('apiKeysForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const form = new FormData(this);
+  fetch('/settings/api-keys', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams(form).toString()
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'ok') {
+      const s = document.getElementById('keySaveStatus');
+      s.classList.remove('hidden');
+      setTimeout(() => s.classList.add('hidden'), 2000);
+    }
+  });
+});
 
 function generateAgentToken() {
   fetch('/api/agent/token').then(r => r.json()).then(data => {
