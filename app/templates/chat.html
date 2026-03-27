@@ -12,22 +12,7 @@
     </h1>
   </div>
 
-  <!-- Лента сообщений (непрерывный диалог) -->
-  <div id="chatThread" class="mb-6 space-y-4"></div>
-
-  <!-- Typing indicator -->
-  <div id="chatTyping" class="hidden mb-4">
-    <div class="flex gap-2 items-center text-[12px] text-g-400 px-3">
-      <div class="flex gap-0.5">
-        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
-        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
-        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
-      </div>
-      AI думает...
-    </div>
-  </div>
-
-  <!-- Карточки шаблонов (всегда видны) -->
+  <!-- Карточки шаблонов -->
   <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-4">
     {% for key, t in chat_templates.items() %}
     <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
@@ -92,6 +77,21 @@
         class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- Лента сообщений -->
+  <div id="chatThread" class="space-y-4 mb-4"></div>
+
+  <!-- Typing indicator -->
+  <div id="chatTyping" class="hidden mb-4">
+    <div class="flex gap-2 items-center text-[12px] text-g-400 px-3">
+      <div class="flex gap-0.5">
+        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+      </div>
+      AI думает...
     </div>
   </div>
 
