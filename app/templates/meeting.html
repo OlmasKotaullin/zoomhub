@@ -163,32 +163,8 @@
 <div id="panel-chat" class="tab-panel hidden">
   <div class="z-card p-5">
     <!-- История -->
-    <div id="meetingChatMessages" class="max-h-[500px] overflow-y-auto mb-4 space-y-3"
+    <div id="meetingChatMessages" class="mb-4 space-y-3"
       hx-get="/meetings/{{ meeting.id }}/chat/history" hx-trigger="load" hx-swap="innerHTML"></div>
-
-    <!-- Шаблоны -->
-    <div id="suggestedPrompts" class="grid grid-cols-2 gap-2 mb-4">
-      <button onclick="askTemplate('follow_up', 'Определи задачи, ответственных и следующие шаги по встрече.')"
-        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
-        <span class="text-[12px] font-semibold block">✅ Follow Up</span>
-        <span class="text-[10px] text-g-400">Задачи + ответственные</span>
-      </button>
-      <button onclick="askTemplate('summary', 'Дай структурированное резюме встречи: ключевые темы, решения, задачи.')"
-        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
-        <span class="text-[12px] font-semibold block">📋 Резюме</span>
-        <span class="text-[10px] text-g-400">Темы, решения, задачи</span>
-      </button>
-      <button onclick="askTemplate('protocol', 'Составь формальный протокол встречи.')"
-        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
-        <span class="text-[12px] font-semibold block">📄 Протокол</span>
-        <span class="text-[10px] text-g-400">Формальный документ</span>
-      </button>
-      <button onclick="askTemplate('tasks', 'Извлеки все задачи, назначь ответственных и дедлайны.')"
-        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
-        <span class="text-[12px] font-semibold block">📊 Трекер задач</span>
-        <span class="text-[10px] text-g-400">Таблица задач</span>
-      </button>
-    </div>
 
     <!-- Streaming response area -->
     <div id="streamArea" class="hidden mb-4">
@@ -215,6 +191,30 @@
           Ещё раз
         </button>
       </div>
+    </div>
+
+    <!-- Шаблоны — ВСЕГДА ВНИЗУ, перед input -->
+    <div id="suggestedPrompts" class="grid grid-cols-2 gap-2 mb-4">
+      <button onclick="askTemplate('follow_up', 'Определи задачи, ответственных и следующие шаги по встрече.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">✅ Follow Up</span>
+        <span class="text-[10px] text-g-400">Задачи + ответственные</span>
+      </button>
+      <button onclick="askTemplate('summary', 'Дай структурированное резюме встречи: ключевые темы, решения, задачи.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">📋 Резюме</span>
+        <span class="text-[10px] text-g-400">Темы, решения, задачи</span>
+      </button>
+      <button onclick="askTemplate('protocol', 'Составь формальный протокол встречи.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">📄 Протокол</span>
+        <span class="text-[10px] text-g-400">Формальный документ</span>
+      </button>
+      <button onclick="askTemplate('tasks', 'Извлеки все задачи, назначь ответственных и дедлайны.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">📊 Трекер задач</span>
+        <span class="text-[10px] text-g-400">Таблица задач</span>
+      </button>
     </div>
 
     <!-- Input -->
@@ -259,7 +259,6 @@ async function sendMeetingChat() {
   meetingStreamText = '';
   input.value = '';
 
-  document.getElementById('suggestedPrompts').classList.add('hidden');
   document.getElementById('streamArea').classList.remove('hidden');
   document.getElementById('chatStreamTyping').classList.remove('hidden');
   document.getElementById('meetingStreamContent').innerHTML = '';
@@ -267,23 +266,45 @@ async function sendMeetingChat() {
   document.getElementById('meetingSendBtn').disabled = true;
 
   try {
+    const controller = new AbortController();
     const resp = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({message, meeting_id: {{ meeting.id }}, template: lastMeetingTemplate}),
+      signal: controller.signal,
     });
+
+    if (!resp.ok) {
+      document.getElementById('chatStreamTyping').classList.add('hidden');
+      document.getElementById('meetingStreamContent').textContent = 'Ошибка сервера. Попробуйте ещё раз.';
+      document.getElementById('meetingSendBtn').disabled = false;
+      lastMeetingTemplate = null;
+      return;
+    }
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     const el = document.getElementById('meetingStreamContent');
-    let timer = null;
+    let renderTimer = null;
+    let staleTimer = null;
 
     document.getElementById('chatStreamTyping').classList.add('hidden');
+
+    // Таймер зависания: если нет данных 45с — прерываем
+    function resetStaleTimer() {
+      if (staleTimer) clearTimeout(staleTimer);
+      staleTimer = setTimeout(() => {
+        console.warn('Stream stale — aborting');
+        controller.abort();
+      }, 45000);
+    }
+    resetStaleTimer();
 
     while (true) {
       const {done, value} = await reader.read();
       if (done) break;
+      resetStaleTimer();
       buffer += decoder.decode(value, {stream: true});
       const parts = buffer.split('\n\n');
       buffer = parts.pop();
@@ -292,27 +313,34 @@ async function sendMeetingChat() {
         try {
           const d = JSON.parse(p.slice(6));
           if (d.done) break;
+          if (d.error) { meetingStreamText += '\n\n**Ошибка:** ' + d.error; continue; }
           if (d.content) {
             meetingStreamText += d.content;
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(() => {
+            if (renderTimer) clearTimeout(renderTimer);
+            renderTimer = setTimeout(() => {
               el.innerHTML = typeof marked !== 'undefined' ? marked.parse(meetingStreamText) : meetingStreamText;
-              const msgs = document.getElementById('meetingChatMessages');
-              msgs.scrollTop = msgs.scrollHeight;
             }, 50);
           }
         } catch(e) { console.warn('SSE parse:', e); }
       }
     }
-    if (typeof marked !== 'undefined') el.innerHTML = marked.parse(meetingStreamText);
+    if (staleTimer) clearTimeout(staleTimer);
+    if (typeof marked !== 'undefined' && meetingStreamText) el.innerHTML = marked.parse(meetingStreamText);
     document.getElementById('meetingActionBar').classList.remove('hidden');
   } catch(e) {
-    document.getElementById('meetingStreamContent').textContent = 'Ошибка. Попробуйте ещё раз.';
+    if (e.name === 'AbortError') {
+      if (meetingStreamText) {
+        document.getElementById('meetingStreamContent').innerHTML += '<p class="text-g-400 text-[11px] mt-2">Ответ может быть неполным (таймаут)</p>';
+      } else {
+        document.getElementById('meetingStreamContent').textContent = 'AI долго думает. Попробуйте ещё раз.';
+      }
+    } else {
+      document.getElementById('meetingStreamContent').textContent = 'Ошибка соединения. Попробуйте ещё раз.';
+    }
   }
 
   document.getElementById('chatStreamTyping').classList.add('hidden');
   document.getElementById('meetingSendBtn').disabled = false;
-  document.getElementById('suggestedPrompts').classList.remove('hidden');
   lastMeetingTemplate = null;
 }
 

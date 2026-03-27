@@ -420,7 +420,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
         for p in providers_chain:
             try:
                 logger.info(f"Trying provider: {p.name}")
-                async for chunk in p.generate_stream(llm_messages, system=system, max_tokens=4096):
+                async for chunk in p.generate_stream(llm_messages, system=system, max_tokens=8192):
                     full_response += chunk
                     yield f"data: {json.dumps({'content': chunk})}\n\n"
                 last_error = None
