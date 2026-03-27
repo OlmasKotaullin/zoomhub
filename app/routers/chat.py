@@ -302,13 +302,15 @@ async def chat_page(request: Request, db: Session = Depends(get_db)):
         .all()
     )
 
-    return templates.TemplateResponse("chat.html", {
+    response = templates.TemplateResponse("chat.html", {
         "request": request,
         "user": user,
         "folders": folders,
         "meetings": meetings,
         "chat_templates": CHAT_TEMPLATES,
     })
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
 
 
 # ---- Streaming API ----
