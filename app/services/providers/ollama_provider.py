@@ -112,7 +112,7 @@ class OllamaProvider(LLMProvider):
                             continue
         except Exception as e:
             logger.error(f"Ollama stream ошибка: {e}")
-            yield f"\n\n[Ошибка: {e}]"
+            raise
 
     async def health_check(self) -> bool:
         try:

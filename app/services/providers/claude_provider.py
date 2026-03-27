@@ -72,7 +72,7 @@ class ClaudeProvider(LLMProvider):
                     yield text
         except Exception as e:
             logger.error(f"Claude stream ошибка: {e}")
-            yield f"\n\n[Ошибка: {e}]"
+            raise
 
     async def health_check(self) -> bool:
         return bool(self.api_key)
