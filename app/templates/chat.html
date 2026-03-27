@@ -2,97 +2,104 @@
 {% block title %}AI-чат — ZoomHub{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto pt-8 pb-4">
+<style>
+  /* Убираем padding основного контейнера, занимаем всю высоту */
+  #mainContent { max-width: 100%; padding: 0; }
+</style>
 
-  <!-- Заголовок -->
-  <div class="text-center mb-6">
-    <h1 class="text-[28px] font-extrabold tracking-tight">
-      <span class="text-zoom">zoom</span><span class="text-g-900">Hub</span>
-      <span class="ai-shimmer ml-1">AI Companion</span>
-    </h1>
-  </div>
+<div class="flex flex-col h-[calc(100vh-0px)]">
 
-  <!-- Единое диалоговое окно -->
-  <div class="z-card p-5 mb-4">
+  <!-- Область сообщений (скроллится) -->
+  <div id="chatScroll" class="flex-1 overflow-y-auto">
+    <div class="max-w-3xl mx-auto px-6 pt-6 pb-4">
 
-    <!-- Поле ввода (сверху) -->
-    <div class="mb-4">
-      <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
-      <textarea id="chatInput" rows="2" placeholder="Напишите сообщение..."
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
-        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px'"
-        class="w-full bg-g-50 rounded-xl px-4 py-3 text-[14px] text-g-800 placeholder-g-400 resize-none outline-none z-input" style="min-height:48px"></textarea>
-      <div class="flex items-center justify-between mt-2">
-        <div class="flex items-center gap-2">
-          <div class="relative">
-            <button onclick="toggleSourceMenu()" class="flex items-center gap-1.5 text-[12px] text-g-500 hover:text-g-700 transition px-2 py-1 rounded-lg hover:bg-g-50">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-              Источник
-            </button>
-            <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
-              <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
-              {% for m in meetings %}
-              <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
-                📅 {{ m.title|truncate(45) }}
-              </button>
-              {% endfor %}
-              {% if folders %}
-              <div class="border-t border-g-100 my-1"></div>
-              <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Папки</p>
-              {% for f in folders %}
-              <button onclick='selectFolder({{ f.id }}, {{ (f.icon ~ " " ~ f.name)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
-                {{ f.icon }} {{ f.name }}
-              </button>
-              {% endfor %}
-              {% endif %}
+      <!-- Заголовок (виден когда нет сообщений) -->
+      <div id="chatWelcome" class="text-center pt-12 pb-8">
+        <h1 class="text-[28px] font-extrabold tracking-tight mb-6">
+          <span class="text-zoom">zoom</span><span class="text-g-900">Hub</span>
+          <span class="ai-shimmer ml-1">AI Companion</span>
+        </h1>
+
+        <!-- Карточки шаблонов -->
+        <div id="templateCards" class="grid grid-cols-3 gap-2.5 max-w-2xl mx-auto">
+          {% for key, t in chat_templates.items() %}
+          <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
+            class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-[16px]">{{ t.icon }}</span>
+              <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition">{{ t.name }}</span>
             </div>
+            <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Лента сообщений -->
+      <div id="chatThread" class="space-y-4"></div>
+
+      <!-- Typing indicator -->
+      <div id="chatTyping" class="hidden py-3">
+        <div class="flex gap-2 items-center text-[12px] text-g-400">
+          <div class="flex gap-0.5">
+            <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+            <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+            <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
           </div>
-          <span id="templateTag" class="hidden text-[11px] text-ai bg-ai/8 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
-            <span id="templateTagName"></span>
-            <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
-          </span>
+          AI думает...
         </div>
-        <button onclick="sendMessage()" id="sendBtn"
-          class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
-          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Разделитель (появляется когда есть сообщения) -->
-    <div id="chatDivider" class="hidden border-t border-g-100 mb-4"></div>
-
-    <!-- Лента сообщений (внутри карточки) -->
-    <div id="chatThread" class="space-y-4"></div>
-
-    <!-- Typing indicator -->
-    <div id="chatTyping" class="hidden mt-3">
-      <div class="flex gap-2 items-center text-[12px] text-g-400">
-        <div class="flex gap-0.5">
-          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
-          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
-          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
-        </div>
-        AI думает...
       </div>
     </div>
   </div>
 
-  <!-- Карточки шаблонов (всегда внизу) -->
-  <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-4">
-    {% for key, t in chat_templates.items() %}
-    <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
-      class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
-      <div class="flex items-center gap-2 mb-1.5">
-        <span class="text-[16px]">{{ t.icon }}</span>
-        <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition">{{ t.name }}</span>
+  <!-- Поле ввода (прибито к низу) -->
+  <div class="border-t border-g-100 bg-white flex-shrink-0">
+    <div class="max-w-3xl mx-auto px-6 py-3">
+      <div class="z-card p-3">
+        <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
+        <textarea id="chatInput" rows="1" placeholder="Напишите сообщение..."
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
+          class="w-full bg-transparent text-[14px] text-g-800 placeholder-g-400 resize-none outline-none" style="min-height:40px"></textarea>
+        <div class="flex items-center justify-between mt-1.5">
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <button onclick="toggleSourceMenu()" class="flex items-center gap-1.5 text-[12px] text-g-500 hover:text-g-700 transition px-2 py-1 rounded-lg hover:bg-g-50">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                Источник
+              </button>
+              <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
+                <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
+                {% for m in meetings %}
+                <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
+                  📅 {{ m.title|truncate(45) }}
+                </button>
+                {% endfor %}
+                {% if folders %}
+                <div class="border-t border-g-100 my-1"></div>
+                <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Папки</p>
+                {% for f in folders %}
+                <button onclick='selectFolder({{ f.id }}, {{ (f.icon ~ " " ~ f.name)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
+                  {{ f.icon }} {{ f.name }}
+                </button>
+                {% endfor %}
+                {% endif %}
+              </div>
+            </div>
+            <span id="templateTag" class="hidden text-[11px] text-ai bg-ai/8 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
+              <span id="templateTagName"></span>
+              <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
+            </span>
+          </div>
+          <button onclick="sendMessage()" id="sendBtn"
+            class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+          </button>
+        </div>
       </div>
-      <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
-    </button>
-    {% endfor %}
+      <p class="text-center text-[10px] text-g-300 mt-1.5">AI может ошибаться. Проверяйте важную информацию.</p>
+    </div>
   </div>
-
-  <p class="text-center text-[11px] text-g-300">AI может ошибаться. Проверяйте важную информацию.</p>
 </div>
 
 <script>
@@ -101,6 +108,11 @@ let selectedFolderId = null;
 let selectedTemplate = null;
 let isSending = false;
 const userInitial = {{ user.name[:1].upper()|tojson }};
+
+function scrollDown() {
+  const el = document.getElementById('chatScroll');
+  el.scrollTop = el.scrollHeight;
+}
 
 function toggleSourceMenu() {
   document.getElementById('sourceMenu').classList.toggle('hidden');
@@ -159,10 +171,12 @@ async function sendMessage() {
   if (!message || isSending) return;
 
   isSending = true;
-  const thread = document.getElementById('chatThread');
 
-  // Показываем разделитель
-  document.getElementById('chatDivider').classList.remove('hidden');
+  // Скрываем welcome при первом сообщении
+  const welcome = document.getElementById('chatWelcome');
+  if (welcome) welcome.classList.add('hidden');
+
+  const thread = document.getElementById('chatThread');
 
   // Сообщение пользователя
   const userEl = document.createElement('div');
@@ -174,14 +188,14 @@ async function sendMessage() {
   // Контейнер ответа AI
   const streamId = 'stream-' + Date.now();
   const aiEl = document.createElement('div');
-  aiEl.className = 'flex gap-3 zoom-gradient-light -mx-5 px-5 py-4 rounded-xl';
+  aiEl.className = 'flex gap-3 zoom-gradient-light rounded-xl px-4 py-4';
   aiEl.innerHTML = '<div class="w-7 h-7 rounded-full bg-ai/12 flex items-center justify-center text-[10px] font-bold text-ai flex-shrink-0 mt-0.5">AI</div>' +
     '<div class="min-w-0 flex-1"><div id="' + streamId + '" class="text-[13px] text-g-700 leading-relaxed ai-md"></div></div>';
   thread.appendChild(aiEl);
 
   // Панель действий
   const actionsEl = document.createElement('div');
-  actionsEl.className = 'hidden flex items-center gap-1 ml-10';
+  actionsEl.className = 'hidden flex items-center gap-1 ml-10 mb-2';
   thread.appendChild(actionsEl);
 
   input.value = ''; input.style.height = 'auto';
@@ -228,11 +242,9 @@ async function sendMessage() {
     }
     if (typeof marked !== 'undefined' && fullText) contentEl.innerHTML = marked.parse(fullText);
 
-    // Панель действий
-    const savedText = fullText;
-    actionsEl.innerHTML = '<button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-white/50" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>';
+    actionsEl.innerHTML = '<button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>';
     actionsEl.classList.remove('hidden');
-    actionsEl._text = savedText;
+    actionsEl._text = fullText;
   } catch(e) {
     document.getElementById(streamId).textContent = 'Ошибка соединения.';
   }
@@ -251,10 +263,6 @@ function copyThis(btn) {
     btn.innerHTML = btn.innerHTML.replace('Копировать', 'Скопировано!');
     setTimeout(() => btn.innerHTML = orig, 1500);
   });
-}
-
-function scrollDown() {
-  window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
 }
 
 function escapeHtml(t) {
