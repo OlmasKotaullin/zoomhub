@@ -139,6 +139,7 @@ function clearContext() {
 }
 
 function selectTemplate(key, name, prompt) {
+  if (isSending) return;
   selectedTemplate = key;
   document.getElementById('chatInput').value = prompt;
   document.getElementById('templateTagName').textContent = name;
