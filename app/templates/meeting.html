@@ -167,7 +167,7 @@
       hx-get="/meetings/{{ meeting.id }}/chat/history" hx-trigger="load" hx-swap="innerHTML"></div>
 
     <!-- Шаблоны -->
-    <div id="suggestedPrompts" class="grid grid-cols-3 gap-2 mb-4">
+    <div id="suggestedPrompts" class="grid grid-cols-2 gap-2 mb-4">
       <button onclick="askTemplate('follow_up', 'Определи задачи, ответственных и следующие шаги по встрече.')"
         class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
         <span class="text-[12px] font-semibold block">✅ Follow Up</span>
@@ -187,11 +187,6 @@
         class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
         <span class="text-[12px] font-semibold block">📊 Трекер задач</span>
         <span class="text-[10px] text-g-400">Таблица задач</span>
-      </button>
-      <button onclick="askTemplate(null, 'Резюме в 3 предложения')"
-        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
-        <span class="text-[12px] font-semibold block">💬 Быстрый вопрос</span>
-        <span class="text-[10px] text-g-400">Свободный вопрос</span>
       </button>
     </div>
 
