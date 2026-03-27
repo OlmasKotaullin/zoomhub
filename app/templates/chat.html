@@ -5,68 +5,80 @@
 <div class="max-w-3xl mx-auto pt-8 pb-4">
 
   <!-- Заголовок -->
-  <div class="text-center mb-8">
+  <div class="text-center mb-6">
     <h1 class="text-[28px] font-extrabold tracking-tight">
       <span class="text-zoom">zoom</span><span class="text-g-900">Hub</span>
       <span class="ai-shimmer ml-1">AI Companion</span>
     </h1>
   </div>
 
-  <!-- Поле ввода -->
-  <div class="z-card p-4 mb-3">
-    <!-- Теги контекста -->
-    <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
+  <!-- Единое диалоговое окно -->
+  <div class="z-card p-5 mb-4">
 
-    <!-- Textarea -->
-    <textarea id="chatInput" rows="2" placeholder="Напишите сообщение..."
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
-      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px'"
-      class="w-full bg-transparent text-[14px] text-g-800 placeholder-g-400 resize-none outline-none" style="min-height:48px"></textarea>
-
-    <!-- Кнопки под textarea -->
-    <div class="flex items-center justify-between mt-2 pt-2 border-t border-g-100">
-      <div class="flex items-center gap-2">
-        <!-- Выбор контекста -->
-        <div class="relative">
-          <button onclick="toggleSourceMenu()" class="flex items-center gap-1.5 text-[12px] text-g-500 hover:text-g-700 transition px-2 py-1 rounded-lg hover:bg-g-50">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            Источник
-          </button>
-          <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
-            <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
-            {% for m in meetings %}
-            <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
-              📅 {{ m.title|truncate(45) }}
+    <!-- Поле ввода (сверху) -->
+    <div class="mb-4">
+      <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
+      <textarea id="chatInput" rows="2" placeholder="Напишите сообщение..."
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px'"
+        class="w-full bg-g-50 rounded-xl px-4 py-3 text-[14px] text-g-800 placeholder-g-400 resize-none outline-none z-input" style="min-height:48px"></textarea>
+      <div class="flex items-center justify-between mt-2">
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <button onclick="toggleSourceMenu()" class="flex items-center gap-1.5 text-[12px] text-g-500 hover:text-g-700 transition px-2 py-1 rounded-lg hover:bg-g-50">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+              Источник
             </button>
-            {% endfor %}
-            {% if folders %}
-            <div class="border-t border-g-100 my-1"></div>
-            <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Папки</p>
-            {% for f in folders %}
-            <button onclick='selectFolder({{ f.id }}, {{ (f.icon ~ " " ~ f.name)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
-              {{ f.icon }} {{ f.name }}
-            </button>
-            {% endfor %}
-            {% endif %}
+            <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
+              <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
+              {% for m in meetings %}
+              <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
+                📅 {{ m.title|truncate(45) }}
+              </button>
+              {% endfor %}
+              {% if folders %}
+              <div class="border-t border-g-100 my-1"></div>
+              <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Папки</p>
+              {% for f in folders %}
+              <button onclick='selectFolder({{ f.id }}, {{ (f.icon ~ " " ~ f.name)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
+                {{ f.icon }} {{ f.name }}
+              </button>
+              {% endfor %}
+              {% endif %}
+            </div>
           </div>
+          <span id="templateTag" class="hidden text-[11px] text-ai bg-ai/8 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
+            <span id="templateTagName"></span>
+            <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
+          </span>
         </div>
-
-        <!-- Тег шаблона -->
-        <span id="templateTag" class="hidden text-[11px] text-ai bg-ai/8 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
-          <span id="templateTagName"></span>
-          <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
-        </span>
+        <button onclick="sendMessage()" id="sendBtn"
+          class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+        </button>
       </div>
+    </div>
 
-      <!-- Send -->
-      <button onclick="sendMessage()" id="sendBtn"
-        class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
-        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-      </button>
+    <!-- Разделитель (появляется когда есть сообщения) -->
+    <div id="chatDivider" class="hidden border-t border-g-100 mb-4"></div>
+
+    <!-- Лента сообщений (внутри карточки) -->
+    <div id="chatThread" class="space-y-4"></div>
+
+    <!-- Typing indicator -->
+    <div id="chatTyping" class="hidden mt-3">
+      <div class="flex gap-2 items-center text-[12px] text-g-400">
+        <div class="flex gap-0.5">
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+        </div>
+        AI думает...
+      </div>
     </div>
   </div>
 
-  <!-- Карточки шаблонов -->
+  <!-- Карточки шаблонов (всегда внизу) -->
   <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-4">
     {% for key, t in chat_templates.items() %}
     <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
@@ -80,22 +92,6 @@
     {% endfor %}
   </div>
 
-  <!-- Лента сообщений -->
-  <div id="chatThread" class="space-y-4 mb-4"></div>
-
-  <!-- Typing indicator -->
-  <div id="chatTyping" class="hidden mb-4">
-    <div class="flex gap-2 items-center text-[12px] text-g-400 px-3">
-      <div class="flex gap-0.5">
-        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
-        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
-        <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
-      </div>
-      AI думает...
-    </div>
-  </div>
-
-  <!-- Дисклеймер -->
   <p class="text-center text-[11px] text-g-300">AI может ошибаться. Проверяйте важную информацию.</p>
 </div>
 
@@ -117,35 +113,28 @@ document.addEventListener('click', (e) => {
 });
 
 function selectMeeting(id, title) {
-  selectedMeetingId = id;
-  selectedFolderId = null;
+  selectedMeetingId = id; selectedFolderId = null;
   updateContextTags('📅 ' + title);
   document.getElementById('sourceMenu').classList.add('hidden');
-  const input = document.getElementById('chatInput');
-  if (input.value.trim() && selectedTemplate) sendMessage();
+  if (document.getElementById('chatInput').value.trim() && selectedTemplate) sendMessage();
 }
 
 function selectFolder(id, name) {
-  selectedFolderId = id;
-  selectedMeetingId = null;
+  selectedFolderId = id; selectedMeetingId = null;
   updateContextTags('📁 ' + name);
   document.getElementById('sourceMenu').classList.add('hidden');
-  const input = document.getElementById('chatInput');
-  if (input.value.trim() && selectedTemplate) sendMessage();
+  if (document.getElementById('chatInput').value.trim() && selectedTemplate) sendMessage();
 }
 
 function updateContextTags(label) {
-  document.getElementById('contextTags').innerHTML = `
-    <span class="text-[11px] bg-zoom/8 text-zoom px-2.5 py-1 rounded-lg font-medium flex items-center gap-1">
-      ${escapeHtml(label)}
-      <button onclick="clearContext()" class="text-zoom/40 hover:text-zoom ml-0.5">&times;</button>
-    </span>
-  `;
+  document.getElementById('contextTags').innerHTML =
+    '<span class="text-[11px] bg-zoom/8 text-zoom px-2.5 py-1 rounded-lg font-medium flex items-center gap-1">' +
+    escapeHtml(label) +
+    ' <button onclick="clearContext()" class="text-zoom/40 hover:text-zoom ml-0.5">&times;</button></span>';
 }
 
 function clearContext() {
-  selectedMeetingId = null;
-  selectedFolderId = null;
+  selectedMeetingId = null; selectedFolderId = null;
   document.getElementById('contextTags').innerHTML = '';
 }
 
@@ -154,11 +143,8 @@ function selectTemplate(key, name, prompt) {
   document.getElementById('chatInput').value = prompt;
   document.getElementById('templateTagName').textContent = name;
   document.getElementById('templateTag').classList.remove('hidden');
-  if (selectedMeetingId || selectedFolderId) {
-    sendMessage();
-  } else {
-    toggleSourceMenu();
-  }
+  if (selectedMeetingId || selectedFolderId) sendMessage();
+  else toggleSourceMenu();
 }
 
 function clearTemplate() {
@@ -174,62 +160,46 @@ async function sendMessage() {
   isSending = true;
   const thread = document.getElementById('chatThread');
 
-  // Добавляем сообщение пользователя в ленту
+  // Показываем разделитель
+  document.getElementById('chatDivider').classList.remove('hidden');
+
+  // Сообщение пользователя
   const userEl = document.createElement('div');
   userEl.className = 'flex gap-3';
-  userEl.innerHTML = `
-    <div class="w-8 h-8 rounded-full bg-zoom/10 flex items-center justify-center text-[11px] font-bold text-zoom flex-shrink-0 mt-0.5">${userInitial}</div>
-    <div class="text-[13px] text-g-800 font-medium pt-1.5">${escapeHtml(message)}</div>
-  `;
+  userEl.innerHTML = '<div class="w-7 h-7 rounded-full bg-zoom/10 flex items-center justify-center text-[10px] font-bold text-zoom flex-shrink-0 mt-0.5">' + userInitial + '</div>' +
+    '<div class="text-[13px] text-g-800 font-medium pt-1">' + escapeHtml(message) + '</div>';
   thread.appendChild(userEl);
 
-  // Добавляем контейнер для ответа AI
-  const aiCard = document.createElement('div');
-  aiCard.className = 'z-card p-5';
+  // Контейнер ответа AI
   const streamId = 'stream-' + Date.now();
-  aiCard.innerHTML = `
-    <div class="flex gap-3">
-      <div class="w-8 h-8 rounded-full bg-ai/12 flex items-center justify-center text-[10px] font-bold text-ai flex-shrink-0 mt-0.5">AI</div>
-      <div class="min-w-0 flex-1">
-        <div id="${streamId}" class="text-[13px] text-g-700 leading-relaxed ai-md"></div>
-      </div>
-    </div>
-  `;
-  thread.appendChild(aiCard);
+  const aiEl = document.createElement('div');
+  aiEl.className = 'flex gap-3 zoom-gradient-light -mx-5 px-5 py-4 rounded-xl';
+  aiEl.innerHTML = '<div class="w-7 h-7 rounded-full bg-ai/12 flex items-center justify-center text-[10px] font-bold text-ai flex-shrink-0 mt-0.5">AI</div>' +
+    '<div class="min-w-0 flex-1"><div id="' + streamId + '" class="text-[13px] text-g-700 leading-relaxed ai-md"></div></div>';
+  thread.appendChild(aiEl);
 
-  // Панель действий (добавится после ответа)
-  const actionId = 'actions-' + Date.now();
-  const actionEl = document.createElement('div');
-  actionEl.id = actionId;
-  actionEl.className = 'hidden flex items-center gap-1 px-3';
-  thread.appendChild(actionEl);
+  // Панель действий
+  const actionsEl = document.createElement('div');
+  actionsEl.className = 'hidden flex items-center gap-1 ml-10';
+  thread.appendChild(actionsEl);
 
-  input.value = '';
-  input.style.height = 'auto';
+  input.value = ''; input.style.height = 'auto';
   document.getElementById('chatTyping').classList.remove('hidden');
   document.getElementById('sendBtn').disabled = true;
-  window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
-
-  const body = {
-    message: message,
-    meeting_id: selectedMeetingId,
-    folder_id: selectedFolderId,
-    template: selectedTemplate,
-  };
+  scrollDown();
 
   let fullText = '';
   try {
     const resp = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body),
+      body: JSON.stringify({message, meeting_id: selectedMeetingId, folder_id: selectedFolderId, template: selectedTemplate}),
     });
-
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     const contentEl = document.getElementById(streamId);
-    let renderTimer = null;
+    let timer = null;
 
     document.getElementById('chatTyping').classList.add('hidden');
 
@@ -237,68 +207,57 @@ async function sendMessage() {
       const {done, value} = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, {stream: true});
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop();
-      for (const part of parts) {
-        if (!part.startsWith('data: ')) continue;
+      const parts = buffer.split('\n\n'); buffer = parts.pop();
+      for (const p of parts) {
+        if (!p.startsWith('data: ')) continue;
         try {
-          const data = JSON.parse(part.slice(6));
-          if (data.done) break;
-          if (data.error) { fullText += '\n\n**Ошибка:** ' + data.error; continue; }
-          if (data.content) {
-            fullText += data.content;
-            if (renderTimer) clearTimeout(renderTimer);
-            renderTimer = setTimeout(() => {
-              if (typeof marked !== 'undefined') contentEl.innerHTML = marked.parse(fullText);
-              else contentEl.textContent = fullText;
-              window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+          const d = JSON.parse(p.slice(6));
+          if (d.done) break;
+          if (d.error) { fullText += '\n\n**Ошибка:** ' + d.error; continue; }
+          if (d.content) {
+            fullText += d.content;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+              contentEl.innerHTML = typeof marked !== 'undefined' ? marked.parse(fullText) : fullText;
+              scrollDown();
             }, 50);
           }
-        } catch (e) { console.warn('SSE parse:', e); }
+        } catch(e) {}
       }
     }
+    if (typeof marked !== 'undefined' && fullText) contentEl.innerHTML = marked.parse(fullText);
 
-    // Финальный рендер
-    if (typeof marked !== 'undefined' && fullText) {
-      contentEl.innerHTML = marked.parse(fullText);
-    }
-
-    // Показываем панель действий
+    // Панель действий
     const savedText = fullText;
-    actionEl.innerHTML = `
-      <button onclick="copyText(this, ${JSON.stringify(savedText).replace(/"/g, '&quot;')})" class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2.5 py-1.5 rounded-lg hover:bg-g-50">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-        Копировать
-      </button>
-    `;
-    actionEl.classList.remove('hidden');
-
-  } catch (e) {
-    console.error('Chat error:', e);
-    const contentEl = document.getElementById(streamId);
-    if (contentEl) contentEl.textContent = 'Ошибка соединения. Попробуйте ещё раз.';
+    actionsEl.innerHTML = '<button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-white/50" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>';
+    actionsEl.classList.remove('hidden');
+    actionsEl._text = savedText;
+  } catch(e) {
+    document.getElementById(streamId).textContent = 'Ошибка соединения.';
   }
 
   isSending = false;
   document.getElementById('chatTyping').classList.add('hidden');
   document.getElementById('sendBtn').disabled = false;
   clearTemplate();
-  window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+  scrollDown();
 }
 
-function copyText(btn, text) {
+function copyThis(btn) {
+  const text = btn.closest('div')._text || '';
   navigator.clipboard.writeText(text).then(() => {
-    const span = btn.querySelector('span') || btn;
     const orig = btn.innerHTML;
     btn.innerHTML = btn.innerHTML.replace('Копировать', 'Скопировано!');
-    setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    setTimeout(() => btn.innerHTML = orig, 1500);
   });
 }
 
+function scrollDown() {
+  window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+}
+
 function escapeHtml(t) {
-  const d = document.createElement('div');
-  d.textContent = t;
-  return d.innerHTML;
+  const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
 }
 </script>
 {% endblock %}
