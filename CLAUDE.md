@@ -34,8 +34,25 @@ s.cookies.set('session_token', r.json().get('token',''))
 "
 ```
 
+## Юнит-тесты
+
+Перед деплоем запусти юнит-тесты:
+
+```bash
+cd /Users/angel/Вайбкодинг\ 2025/projects/zoomhub
+./venv/bin/python -m pytest tests/ -v
+```
+
+| Файл | Что покрывает |
+|---|---|
+| `tests/test_transcriber.py` | Парсер ответов Буквицы: parse_response, таймкоды, спикеры |
+| `tests/test_summarizer.py` | Парсер JSON саммари (обрезанный, markdown fences), fallback chain (Groq → Gemini → Claude) |
+| `tests/test_agent_dedup.py` | Дедупликация Zoom audio/video файлов (_extract_zoom_id) |
+| `tests/test_models.py` | SQLAlchemy модели |
+| `tests/test_routes.py` | FastAPI эндпоинты |
+
 **Правила:**
-- НЕ говори что всё работает, пока не прогнал тесты на проде
+- НЕ говори что всё работает, пока не прогнал `pytest tests/ -v` и тесты на проде
 - Тестируй минимум 5 запросов подряд для streaming (rate limits)
 - Проверяй onclick в шаблонах — `|tojson` + одинарные кавычки `onclick='...'`
 - При 429 ошибках — проверяй fallback цепочку (Groq → Gemini → Claude)
