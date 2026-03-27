@@ -190,6 +190,7 @@ function clearContext() {
 }
 
 function selectTemplate(key, name, prompt) {
+  console.log('selectTemplate:', key, 'meeting:', selectedMeetingId, 'folder:', selectedFolderId, 'isSending:', isSending);
   selectedTemplate = key;
   document.getElementById('chatInput').value = prompt;
   document.getElementById('chatInput').style.height = 'auto';
@@ -201,6 +202,7 @@ function selectTemplate(key, name, prompt) {
 
   // Если контекст выбран — сразу отправляем
   if (selectedMeetingId || selectedFolderId) {
+    console.log('Auto-sending with context');
     sendMessage();
   } else {
     // Нет контекста — предложить выбрать встречу
@@ -216,7 +218,8 @@ function clearTemplate() {
 async function sendMessage() {
   const input = document.getElementById('chatInput');
   const message = input.value.trim();
-  if (!message || isSending) return;
+  console.log('sendMessage:', {message: message?.slice(0,30), isSending, meeting: selectedMeetingId, folder: selectedFolderId, template: selectedTemplate});
+  if (!message || isSending) { console.log('BLOCKED:', !message ? 'empty' : 'isSending'); return; }
 
   lastMessage = message;
   isSending = true;
