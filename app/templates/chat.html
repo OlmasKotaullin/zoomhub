@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}AI-чат — ZoomHub{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto pt-8">
+
+  <!-- Заголовок -->
+  <div class="text-center mb-8">
+    <h1 class="text-[28px] font-extrabold tracking-tight">
+      <span class="text-zoom">zoom</span><span class="text-g-900">Hub</span>
+      <span class="ai-shimmer ml-1">AI Companion</span>
+    </h1>
+  </div>
+
+  <!-- Область ответа (скрыта до отправки) -->
+  <div id="chatResponse" class="hidden mb-6">
+    <!-- Вопрос пользователя -->
+    <div id="userQuestion" class="flex gap-3 mb-4">
+      <div class="w-8 h-8 rounded-full bg-zoom/10 flex items-center justify-center text-[11px] font-bold text-zoom flex-shrink-0 mt-0.5">
+        {{ user.name[:1].upper() }}
+      </div>
+      <div class="text-[13px] text-g-800 font-medium pt-1.5" id="userQuestionText"></div>
+    </div>
+
+    <!-- Ответ AI -->
+    <div class="z-card p-5 mb-3">
+      <div class="flex gap-3">
+        <div class="w-8 h-8 rounded-full bg-ai/12 flex items-center justify-center text-[10px] font-bold text-ai flex-shrink-0 mt-0.5">AI</div>
+        <div class="min-w-0 flex-1">
+          <div id="streamContent" class="text-[13px] text-g-700 leading-relaxed ai-md"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Typing indicator -->
+    <div id="chatTyping" class="hidden mb-3">
+      <div class="flex gap-2 items-center text-[12px] text-g-400 px-3">
+        <div class="flex gap-0.5">
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+        </div>
+        AI думает...
+      </div>
+    </div>
+
+    <!-- Панель действий -->
+    <div id="actionBar" class="hidden flex items-center gap-1 px-3 mb-6">
+      <button onclick="copyResponse()" class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2.5 py-1.5 rounded-lg hover:bg-g-50" title="Копировать">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        <span id="copyLabel">Копировать</span>
+      </button>
+      <button onclick="regenerate()" class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2.5 py-1.5 rounded-lg hover:bg-g-50" title="Ещё раз">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Ещё раз
+      </button>
+    </div>
+  </div>
+
+  <!-- Поле ввода -->
+  <div class="z-card p-4 mb-4">
+    <!-- Теги контекста -->
+    <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
+
+    <!-- Textarea -->
+    <textarea id="chatInput" rows="2" placeholder="Напишите сообщение..."
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px'"
+      class="w-full bg-transparent text-[14px] text-g-800 placeholder-g-400 resize-none outline-none" style="min-height:48px"></textarea>
+
+    <!-- Кнопки под textarea -->
+    <div class="flex items-center justify-between mt-2 pt-2 border-t border-g-100">
+      <div class="flex items-center gap-2">
+        <!-- Выбор контекста -->
+        <div class="relative">
+          <button onclick="toggleSourceMenu()" class="flex items-center gap-1.5 text-[12px] text-g-500 hover:text-g-700 transition px-2 py-1 rounded-lg hover:bg-g-50">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            Источник
+          </button>
+          <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
+            <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
+            {% for m in meetings %}
+            <button onclick="selectMeeting({{ m.id }}, '{{ m.title|truncate(40) }}')" class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
+              📅 {{ m.title|truncate(45) }}
+            </button>
+            {% endfor %}
+            {% if folders %}
+            <div class="border-t border-g-100 my-1"></div>
+            <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Папки</p>
+            {% for f in folders %}
+            <button onclick="selectFolder({{ f.id }}, '{{ f.icon }} {{ f.name }}')" class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition">
+              {{ f.icon }} {{ f.name }}
+            </button>
+            {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Тег шаблона -->
+        <span id="templateTag" class="hidden text-[11px] text-ai bg-ai/8 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
+          <span id="templateTagName"></span>
+          <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
+        </span>
+      </div>
+
+      <!-- Send -->
+      <button onclick="sendMessage()" id="sendBtn"
+        class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Карточки шаблонов -->
+  <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-6">
+    {% for key, t in chat_templates.items() %}
+    <button onclick="selectTemplate('{{ key }}', '{{ t.name }}', '{{ t.prompt }}')"
+      class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="text-[16px]">{{ t.icon }}</span>
+        <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition">{{ t.name }}</span>
+      </div>
+      <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- Дисклеймер -->
+  <p class="text-center text-[11px] text-g-300 mb-4">AI может ошибаться. Проверяйте важную информацию.</p>
+</div>
+
+<script>
+// State
+let selectedMeetingId = null;
+let selectedFolderId = null;
+let selectedTemplate = null;
+let lastMessage = '';
+let isSending = false;
+let fullResponseText = '';
+
+function toggleSourceMenu() {
+  document.getElementById('sourceMenu').classList.toggle('hidden');
+}
+
+// Close menu on outside click
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('sourceMenu');
+  if (menu && !menu.classList.contains('hidden') && !e.target.closest('#sourceMenu') && !e.target.closest('[onclick*="toggleSourceMenu"]')) {
+    menu.classList.add('hidden');
+  }
+});
+
+function selectMeeting(id, title) {
+  selectedMeetingId = id;
+  selectedFolderId = null;
+  updateContextTags('📅 ' + title, 'meeting');
+  document.getElementById('sourceMenu').classList.add('hidden');
+}
+
+function selectFolder(id, name) {
+  selectedFolderId = id;
+  selectedMeetingId = null;
+  updateContextTags('📁 ' + name, 'folder');
+  document.getElementById('sourceMenu').classList.add('hidden');
+}
+
+function updateContextTags(label, type) {
+  const container = document.getElementById('contextTags');
+  container.innerHTML = `
+    <span class="text-[11px] bg-zoom/8 text-zoom px-2.5 py-1 rounded-lg font-medium flex items-center gap-1">
+      ${escapeHtml(label)}
+      <button onclick="clearContext()" class="text-zoom/40 hover:text-zoom ml-0.5">&times;</button>
+    </span>
+  `;
+}
+
+function clearContext() {
+  selectedMeetingId = null;
+  selectedFolderId = null;
+  document.getElementById('contextTags').innerHTML = '';
+}
+
+function selectTemplate(key, name, prompt) {
+  selectedTemplate = key;
+  document.getElementById('chatInput').value = prompt;
+  document.getElementById('chatInput').style.height = 'auto';
+  document.getElementById('chatInput').style.height = document.getElementById('chatInput').scrollHeight + 'px';
+
+  const tag = document.getElementById('templateTag');
+  document.getElementById('templateTagName').textContent = name;
+  tag.classList.remove('hidden');
+
+  // Если нет контекста и есть встречи — предложить выбрать
+  if (!selectedMeetingId && !selectedFolderId) {
+    toggleSourceMenu();
+  }
+}
+
+function clearTemplate() {
+  selectedTemplate = null;
+  document.getElementById('templateTag').classList.add('hidden');
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message || isSending) return;
+
+  lastMessage = message;
+  isSending = true;
+  fullResponseText = '';
+
+  // Show response area
+  document.getElementById('chatResponse').classList.remove('hidden');
+  document.getElementById('templateCards').classList.add('hidden');
+  document.getElementById('userQuestionText').textContent = message;
+  document.getElementById('streamContent').innerHTML = '';
+  document.getElementById('chatTyping').classList.remove('hidden');
+  document.getElementById('actionBar').classList.add('hidden');
+  document.getElementById('sendBtn').disabled = true;
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Build request
+  const body = {
+    message: message,
+    meeting_id: selectedMeetingId,
+    folder_id: selectedFolderId,
+    template: selectedTemplate,
+  };
+
+  try {
+    const resp = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const contentEl = document.getElementById('streamContent');
+    let renderTimer = null;
+
+    document.getElementById('chatTyping').classList.add('hidden');
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, {stream: true});
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(part.slice(6));
+          if (data.done) break;
+          if (data.error) {
+            fullResponseText += '\n\n**Ошибка:** ' + data.error;
+            continue;
+          }
+          if (data.content) {
+            fullResponseText += data.content;
+            // Debounced render
+            if (renderTimer) clearTimeout(renderTimer);
+            renderTimer = setTimeout(() => {
+              if (typeof marked !== 'undefined') {
+                contentEl.innerHTML = marked.parse(fullResponseText);
+              } else {
+                contentEl.textContent = fullResponseText;
+              }
+              window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+            }, 50);
+          }
+        } catch (e) {}
+      }
+    }
+
+    // Final render
+    if (typeof marked !== 'undefined') {
+      contentEl.innerHTML = marked.parse(fullResponseText);
+    }
+
+    // Show action bar
+    document.getElementById('actionBar').classList.remove('hidden');
+
+  } catch (e) {
+    console.error('Chat error:', e);
+    document.getElementById('streamContent').textContent = 'Ошибка соединения. Попробуйте ещё раз.';
+  }
+
+  isSending = false;
+  document.getElementById('chatTyping').classList.add('hidden');
+  document.getElementById('sendBtn').disabled = false;
+  clearTemplate();
+}
+
+function copyResponse() {
+  navigator.clipboard.writeText(fullResponseText).then(() => {
+    const label = document.getElementById('copyLabel');
+    label.textContent = 'Скопировано!';
+    setTimeout(() => { label.textContent = 'Копировать'; }, 1500);
+  });
+}
+
+function regenerate() {
+  if (lastMessage) {
+    document.getElementById('chatInput').value = lastMessage;
+    sendMessage();
+  }
+}
+
+function escapeHtml(t) {
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+</script>
+{% endblock %}

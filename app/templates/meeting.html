@@ -162,27 +162,76 @@
 
 <div id="panel-chat" class="tab-panel hidden">
   <div class="z-card p-5">
+    <!-- История -->
     <div id="meetingChatMessages" class="max-h-[500px] overflow-y-auto mb-4 space-y-3"
       hx-get="/meetings/{{ meeting.id }}/chat/history" hx-trigger="load" hx-swap="innerHTML"></div>
 
-    <div id="suggestedPrompts" class="flex flex-wrap gap-2 mb-4">
-      <button onclick="askSuggested('Какие ключевые решения были приняты?')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">Ключевые решения</button>
-      <button onclick="askSuggested('Составь план действий')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">План действий</button>
-      <button onclick="askSuggested('Кто за что отвечает?')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">Ответственные</button>
-      <button onclick="askSuggested('Резюме в 3 предложения')" class="z-btn text-[12px] px-3 py-2 zoom-gradient-light text-zoom font-semibold rounded-xl hover:shadow-sm transition">Короткое резюме</button>
+    <!-- Шаблоны -->
+    <div id="suggestedPrompts" class="grid grid-cols-3 gap-2 mb-4">
+      <button onclick="askTemplate('follow_up', 'Определи задачи, ответственных и следующие шаги по встрече.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">✅ Follow Up</span>
+        <span class="text-[10px] text-g-400">Задачи + ответственные</span>
+      </button>
+      <button onclick="askTemplate('summary', 'Дай структурированное резюме встречи: ключевые темы, решения, задачи.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">📋 Резюме</span>
+        <span class="text-[10px] text-g-400">Темы, решения, задачи</span>
+      </button>
+      <button onclick="askTemplate('protocol', 'Составь формальный протокол встречи.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">📄 Протокол</span>
+        <span class="text-[10px] text-g-400">Формальный документ</span>
+      </button>
+      <button onclick="askTemplate('tasks', 'Извлеки все задачи, назначь ответственных и дедлайны.')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">📊 Трекер задач</span>
+        <span class="text-[10px] text-g-400">Таблица задач</span>
+      </button>
+      <button onclick="askTemplate(null, 'Резюме в 3 предложения')"
+        class="text-left p-2.5 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition">
+        <span class="text-[12px] font-semibold block">💬 Быстрый вопрос</span>
+        <span class="text-[10px] text-g-400">Свободный вопрос</span>
+      </button>
     </div>
 
-    <div id="chatTyping" class="htmx-indicator flex gap-3 zoom-gradient-light rounded-xl px-4 py-3 mb-3">
-      <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 bg-ai/15 text-ai">AI</div>
-      <div class="text-sm text-g-500 pt-1">AI Companion думает<span class="animate-pulse">...</span></div>
+    <!-- Streaming response area -->
+    <div id="streamArea" class="hidden mb-4">
+      <div id="chatStreamTyping" class="flex gap-2 items-center text-[12px] text-g-400 mb-2">
+        <div class="flex gap-0.5">
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+          <span class="w-1.5 h-1.5 bg-ai/40 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+        </div>
+        AI думает...
+      </div>
+      <div class="flex gap-3">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 bg-ai/15 text-ai">AI</div>
+        <div id="meetingStreamContent" class="text-[13px] text-g-700 leading-relaxed ai-md min-w-0 flex-1"></div>
+      </div>
+      <!-- Action bar -->
+      <div id="meetingActionBar" class="hidden flex items-center gap-1 mt-2 ml-10">
+        <button onclick="copyMeetingResponse()" class="flex items-center gap-1 text-[11px] text-g-400 hover:text-g-600 px-2 py-1 rounded-lg hover:bg-g-50">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          <span id="meetingCopyLabel">Копировать</span>
+        </button>
+        <button onclick="regenerateMeeting()" class="flex items-center gap-1 text-[11px] text-g-400 hover:text-g-600 px-2 py-1 rounded-lg hover:bg-g-50">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Ещё раз
+        </button>
+      </div>
     </div>
 
-    <form id="chatForm" hx-post="/meetings/{{ meeting.id }}/chat" hx-target="#meetingChatMessages" hx-swap="beforeend"
-      hx-indicator="#chatTyping" hx-on::after-request="onChatDone()" class="flex gap-2">
-      <input id="chatInput" name="message" placeholder="Задай вопрос по встрече..." required
+    <!-- Input -->
+    <div class="flex gap-2">
+      <input id="chatInput" placeholder="Задай вопрос по встрече..."
+        onkeydown="if(event.key==='Enter'){event.preventDefault();sendMeetingChat()}"
         class="z-input flex-1 bg-g-50 px-3.5 py-2.5 text-[13px] placeholder-g-400">
-      <button type="submit" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Отправить</button>
-    </form>
+      <button onclick="sendMeetingChat()" id="meetingSendBtn" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Отправить</button>
+    </div>
+    <div class="mt-2 text-center">
+      <a href="/chat?meeting_id={{ meeting.id }}" class="text-[11px] text-ai hover:underline transition">Открыть в полном чате &rarr;</a>
+    </div>
   </div>
 </div>
 
@@ -196,8 +245,94 @@ function showTab(name) {
 }
 function editTitle() { document.getElementById('meetingTitle').classList.add('hidden'); document.getElementById('titleForm').classList.remove('hidden'); document.querySelector('#titleForm input').focus(); }
 function cancelEditTitle() { document.getElementById('meetingTitle').classList.remove('hidden'); document.getElementById('titleForm').classList.add('hidden'); }
-function askSuggested(t) { document.getElementById('chatInput').value=t; document.getElementById('suggestedPrompts').classList.add('hidden'); htmx.trigger('#chatForm','submit'); }
-function onChatDone() { document.getElementById('suggestedPrompts').classList.add('hidden'); document.getElementById('chatInput').value=''; const el=document.getElementById('meetingChatMessages'); el.scrollTop=el.scrollHeight; }
+let meetingStreamText = '';
+let lastMeetingTemplate = null;
+let lastMeetingMessage = '';
+
+function askTemplate(template, prompt) {
+  document.getElementById('chatInput').value = prompt;
+  lastMeetingTemplate = template;
+  sendMeetingChat();
+}
+
+async function sendMeetingChat() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message) return;
+
+  lastMeetingMessage = message;
+  meetingStreamText = '';
+  input.value = '';
+
+  document.getElementById('suggestedPrompts').classList.add('hidden');
+  document.getElementById('streamArea').classList.remove('hidden');
+  document.getElementById('chatStreamTyping').classList.remove('hidden');
+  document.getElementById('meetingStreamContent').innerHTML = '';
+  document.getElementById('meetingActionBar').classList.add('hidden');
+  document.getElementById('meetingSendBtn').disabled = true;
+
+  try {
+    const resp = await fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message, meeting_id: {{ meeting.id }}, template: lastMeetingTemplate}),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const el = document.getElementById('meetingStreamContent');
+    let timer = null;
+
+    document.getElementById('chatStreamTyping').classList.add('hidden');
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+      for (const p of parts) {
+        if (!p.startsWith('data: ')) continue;
+        try {
+          const d = JSON.parse(p.slice(6));
+          if (d.done) break;
+          if (d.content) {
+            meetingStreamText += d.content;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+              el.innerHTML = typeof marked !== 'undefined' ? marked.parse(meetingStreamText) : meetingStreamText;
+              const msgs = document.getElementById('meetingChatMessages');
+              msgs.scrollTop = msgs.scrollHeight;
+            }, 50);
+          }
+        } catch(e) {}
+      }
+    }
+    if (typeof marked !== 'undefined') el.innerHTML = marked.parse(meetingStreamText);
+    document.getElementById('meetingActionBar').classList.remove('hidden');
+  } catch(e) {
+    document.getElementById('meetingStreamContent').textContent = 'Ошибка. Попробуйте ещё раз.';
+  }
+
+  document.getElementById('chatStreamTyping').classList.add('hidden');
+  document.getElementById('meetingSendBtn').disabled = false;
+  lastMeetingTemplate = null;
+}
+
+function copyMeetingResponse() {
+  navigator.clipboard.writeText(meetingStreamText).then(() => {
+    const l = document.getElementById('meetingCopyLabel');
+    l.textContent = 'Скопировано!'; setTimeout(() => l.textContent = 'Копировать', 1500);
+  });
+}
+
+function regenerateMeeting() {
+  if (lastMeetingMessage) {
+    document.getElementById('chatInput').value = lastMeetingMessage;
+    sendMeetingChat();
+  }
+}
 function moveToFolder(meetingId, folderId) {
   const fd = new FormData(); fd.append('folder_id', folderId || '0');
   fetch('/meetings/' + meetingId, { method: 'PATCH', body: fd });

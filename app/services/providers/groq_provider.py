@@ -1,6 +1,8 @@
 """Groq LLM-провайдер — бесплатный, сверхбыстрый, Llama 3.3 70B."""
 
+import json
 import logging
+from typing import AsyncGenerator
 
 import httpx
 
@@ -66,6 +68,51 @@ class GroqProvider(LLMProvider):
             except Exception:
                 logger.error("Groq retry не удался")
                 raise
+
+    async def generate_stream(self, messages: list[dict], system: str = "",
+                              max_tokens: int = 4096) -> AsyncGenerator[str, None]:
+        if not self.api_key:
+            raise RuntimeError("GROQ_API_KEY не задан")
+
+        all_messages = []
+        if system:
+            all_messages.append({"role": "system", "content": system})
+        for msg in messages:
+            if msg.get("role") != "system":
+                all_messages.append({"role": msg["role"], "content": msg["content"]})
+
+        body = {
+            "model": MODEL,
+            "messages": all_messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+            "stream": True,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", API_URL, json=body, headers=headers) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        data_str = line[6:]
+                        if data_str.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                            if content:
+                                yield content
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            logger.error(f"Groq stream ошибка: {e}")
+            yield f"\n\n[Ошибка: {e}]"
 
     async def health_check(self) -> bool:
         if not self.api_key:

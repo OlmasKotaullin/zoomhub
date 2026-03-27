@@ -1,6 +1,7 @@
 """Claude LLM-провайдер — Anthropic API."""
 
 import logging
+from typing import AsyncGenerator
 
 import anthropic
 
@@ -51,6 +52,27 @@ class ClaudeProvider(LLMProvider):
             except Exception:
                 logger.error("Claude retry не удался")
                 raise
+
+    async def generate_stream(self, messages: list[dict], system: str = "",
+                              max_tokens: int = 4096) -> AsyncGenerator[str, None]:
+        if not self.api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY не задан")
+
+        client = anthropic.AsyncAnthropic(api_key=self.api_key)
+        filtered_messages = [m for m in messages if m.get("role") != "system"]
+
+        try:
+            async with client.messages.stream(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=filtered_messages,
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except Exception as e:
+            logger.error(f"Claude stream ошибка: {e}")
+            yield f"\n\n[Ошибка: {e}]"
 
     async def health_check(self) -> bool:
         return bool(self.api_key)

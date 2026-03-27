@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import AsyncGenerator
 
 import httpx
 
@@ -80,6 +81,38 @@ class OllamaProvider(LLMProvider):
         except Exception as e:
             logger.error(f"Ollama ошибка: {e}")
             raise
+
+    async def generate_stream(self, messages: list[dict], system: str = "",
+                              max_tokens: int = 4096) -> AsyncGenerator[str, None]:
+        await self._ensure_model()
+        url = f"{self.base_url}/api/chat"
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "options": {"num_predict": max_tokens, "num_ctx": 16384},
+        }
+        if system:
+            payload["messages"] = [{"role": "system", "content": system}] + payload["messages"]
+
+        try:
+            async with httpx.AsyncClient(timeout=300) as client:
+                async with client.stream("POST", url, json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            chunk = json.loads(line)
+                            content = chunk.get("message", {}).get("content", "")
+                            if content:
+                                yield content
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            logger.error(f"Ollama stream ошибка: {e}")
+            yield f"\n\n[Ошибка: {e}]"
 
     async def health_check(self) -> bool:
         try:
