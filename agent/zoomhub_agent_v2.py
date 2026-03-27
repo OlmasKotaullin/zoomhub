@@ -56,6 +56,13 @@ def save_state(state_path: Path, hashes: set):
     state_path.write_text(json.dumps(list(hashes)))
 
 
+def _extract_zoom_id(filename: str) -> str | None:
+    """Извлекает Zoom meeting ID из имени файла (audio1234567890 / video1234567890)."""
+    import re
+    m = re.search(r'(?:audio|video)(\d{8,})', filename)
+    return m.group(1) if m else None
+
+
 def find_new_files(folder: Path, processed: set, since_ts: float = 0) -> list[Path]:
     files = []
     if not folder.exists():
@@ -70,7 +77,27 @@ def find_new_files(folder: Path, processed: set, since_ts: float = 0) -> list[Pa
                         files.append(f)
         except PermissionError:
             continue
-    return sorted(files, key=lambda f: f.stat().st_mtime)
+
+    # Дедупликация: audio+video от одной Zoom-встречи → оставляем только audio (меньше)
+    zoom_groups: dict[str, list[Path]] = {}
+    other_files: list[Path] = []
+    for f in files:
+        zid = _extract_zoom_id(f.name)
+        if zid:
+            zoom_groups.setdefault(zid, []).append(f)
+        else:
+            other_files.append(f)
+
+    deduped = list(other_files)
+    for zid, group in zoom_groups.items():
+        if len(group) == 1:
+            deduped.append(group[0])
+        else:
+            # Предпочитаем audio (меньше размер)
+            audio = [f for f in group if 'audio' in f.name.lower()]
+            deduped.append(audio[0] if audio else min(group, key=lambda f: f.stat().st_size))
+
+    return sorted(deduped, key=lambda f: f.stat().st_mtime)
 
 
 def is_stable(path: Path) -> bool:

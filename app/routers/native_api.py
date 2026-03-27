@@ -156,6 +156,15 @@ async def upload_meeting(
     if not title:
         title = Path(file.filename).stem
 
+    # Дедупликация: если zoom_id уже есть в title другой встречи — пропускаем
+    import re
+    zoom_match = re.search(r'(?:audio|video)(\d{8,})', title)
+    if zoom_match:
+        zoom_id = zoom_match.group(1)
+        existing = db.query(Meeting).filter(Meeting.title.contains(zoom_id)).first()
+        if existing:
+            return _meeting_dict(existing)  # уже обработана
+
     folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
 
     meeting = Meeting(
