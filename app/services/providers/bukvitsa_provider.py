@@ -22,7 +22,16 @@ POLL_INTERVAL = 5  # секунд между проверками
 # Session in data dir (persistent volume on server)
 _session_in_data = DATA_DIR / "zoomhub"
 _session_in_base = BASE_DIR / "zoomhub"
-SESSION_PATH = str(_session_in_data if _session_in_data.with_suffix(".session").exists() else _session_in_base)
+
+
+def _get_session_path() -> str:
+    """Динамически определяет путь к сессии (проверяет при каждом вызове)."""
+    if _session_in_data.with_suffix(".session").exists():
+        return str(_session_in_data)
+    return str(_session_in_base)
+
+
+SESSION_PATH = _get_session_path()
 
 DONE_MARKERS = ["обработан", "расшифровка:", "создано в буквица"]
 PROGRESS_MARKERS = [
@@ -50,13 +59,14 @@ async def _get_client() -> TelegramClient:
                 "BUKVITSA_BOT_USERNAME в .env и запустите: python setup_telegram.py"
             )
 
-        session_file = Path(f"{SESSION_PATH}.session")
+        session_path = _get_session_path()
+        session_file = Path(f"{session_path}.session")
         if not session_file.exists():
             raise RuntimeError("Telegram-сессия не найдена. Запустите: python setup_telegram.py")
 
         for attempt in range(3):
             try:
-                client = TelegramClient(SESSION_PATH, TELEGRAM_API_ID, TELEGRAM_API_HASH)
+                client = TelegramClient(session_path, TELEGRAM_API_ID, TELEGRAM_API_HASH)
                 await client.connect()
                 break
             except Exception as e:
