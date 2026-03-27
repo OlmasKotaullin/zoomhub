@@ -94,7 +94,7 @@ class GroqProvider(LLMProvider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", API_URL, json=body, headers=headers) as resp:
                     resp.raise_for_status()
                     async for line in resp.aiter_lines():

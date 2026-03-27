@@ -110,7 +110,7 @@ class GeminiProvider(LLMProvider):
         url = f"{API_BASE}/{MODEL}:streamGenerateContent?alt=sse&key={self.api_key}"
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
+            async with httpx.AsyncClient(timeout=300) as client:
                 async with client.stream("POST", url, json=body) as resp:
                     resp.raise_for_status()
                     async for line in resp.aiter_lines():
