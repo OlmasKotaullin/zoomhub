@@ -48,30 +48,48 @@ async def generate_summary(transcript_text: str, provider_name: str | None = Non
     Returns:
         {"tldr": str, "tasks": list, "topics": list, "insights": list, "raw_response": str}
     """
+    from app.config import GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
+
     if provider_name:
-        provider = make_provider_by_name(provider_name)
+        providers = [make_provider_by_name(provider_name)]
     else:
         provider = get_provider_for_text(len(transcript_text))
-    max_chars = CONTEXT_LIMITS.get(provider.name, 20000)
-    text = transcript_text[:max_chars]
+        providers = [provider]
 
-    if len(transcript_text) > max_chars:
-        logger.info(f"Транскрипт обрезан: {len(transcript_text)} → {max_chars} символов для {provider.name}")
+    # Fallback chain: основной → Gemini → Claude
+    if not provider_name:
+        primary = providers[0].name
+        if primary != "gemini" and GOOGLE_AI_API_KEY:
+            providers.append(make_provider_by_name("gemini"))
+        if primary != "claude" and ANTHROPIC_API_KEY:
+            providers.append(make_provider_by_name("claude"))
 
-    try:
-        raw_response = await provider.generate(
-            messages=[
-                {"role": "user", "content": f"Вот транскрипт встречи:\n\n{text}"}
-            ],
-            system=SYSTEM_PROMPT,
-            json_mode=True,
-            max_tokens=4096,
-        )
-        return _parse_summary(raw_response)
+    for provider in providers:
+        max_chars = CONTEXT_LIMITS.get(provider.name, 20000)
+        text = transcript_text[:max_chars]
 
-    except Exception as e:
-        logger.error(f"LLM ({provider.name}) ошибка: {e}")
-        return empty_summary()
+        if len(transcript_text) > max_chars:
+            logger.info(f"Транскрипт обрезан: {len(transcript_text)} → {max_chars} символов для {provider.name}")
+
+        try:
+            raw_response = await provider.generate(
+                messages=[
+                    {"role": "user", "content": f"Вот транскрипт встречи:\n\n{text}"}
+                ],
+                system=SYSTEM_PROMPT,
+                json_mode=True,
+                max_tokens=4096,
+            )
+            result = _parse_summary(raw_response)
+            if result.get("tldr"):
+                logger.info(f"Саммари сгенерировано через {provider.name}")
+                return result
+            logger.warning(f"Пустой ответ от {provider.name}, пробую следующий...")
+        except Exception as e:
+            logger.warning(f"LLM ({provider.name}) ошибка: {e}, пробую следующий...")
+
+    logger.error("Все LLM провайдеры не смогли сгенерировать саммари")
+    return empty_summary()
 
 
 def _parse_summary(raw_response: str) -> dict:
