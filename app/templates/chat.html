@@ -12,20 +12,6 @@
     </h1>
   </div>
 
-  <!-- Карточки шаблонов -->
-  <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-4">
-    {% for key, t in chat_templates.items() %}
-    <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
-      class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
-      <div class="flex items-center gap-2 mb-1.5">
-        <span class="text-[16px]">{{ t.icon }}</span>
-        <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition">{{ t.name }}</span>
-      </div>
-      <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
-    </button>
-    {% endfor %}
-  </div>
-
   <!-- Поле ввода -->
   <div class="z-card p-4 mb-3">
     <!-- Теги контекста -->
@@ -78,6 +64,20 @@
         <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
       </button>
     </div>
+  </div>
+
+  <!-- Карточки шаблонов -->
+  <div id="templateCards" class="grid grid-cols-3 gap-2.5 mb-4">
+    {% for key, t in chat_templates.items() %}
+    <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
+      class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="text-[16px]">{{ t.icon }}</span>
+        <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition">{{ t.name }}</span>
+      </div>
+      <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
+    </button>
+    {% endfor %}
   </div>
 
   <!-- Лента сообщений -->
