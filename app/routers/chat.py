@@ -348,12 +348,14 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     else:
         system = MEETING_SYSTEM
 
-    # Контекст (с проверкой владельца)
+    # Контекст (с проверкой владельца — обнуляем ID если не найден)
     context = ""
     if mid:
         meeting = db.query(Meeting).filter(Meeting.id == mid, Meeting.user_id == user.id).first()
         if meeting:
             context = _build_meeting_context(meeting)
+        else:
+            mid = None  # встреча не найдена или не принадлежит пользователю
     elif fid:
         folder = db.query(Folder).filter(Folder.id == fid, Folder.user_id == user.id).first()
         if folder:
@@ -370,6 +372,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
                 if len("\n".join(parts)) > 100000:
                     break
             context = "\n".join(parts)[:100000]
+        else:
+            fid = None  # папка не найдена или не принадлежит пользователю
 
     # LLM messages
     llm_messages = []
