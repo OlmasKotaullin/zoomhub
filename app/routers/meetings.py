@@ -97,6 +97,19 @@ async def upload_meeting(
     if not title:
         title = Path(file.filename).stem
 
+    # Дедупликация Zoom audio/video: если zoom_id уже обработан — редирект на существующую
+    import re
+    zoom_match = re.search(r'(?:audio|video)(\d{8,})', title)
+    if zoom_match:
+        zoom_id = zoom_match.group(1)
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.title.contains(zoom_id),
+            Meeting.status != MeetingStatus.error,
+        ).first()
+        if existing:
+            return RedirectResponse(f"/meetings/{existing.id}", status_code=303)
+
     # Парсим folder_id — HTML отправляет "" для "Без папки"
     folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
 

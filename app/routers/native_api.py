@@ -161,7 +161,11 @@ async def upload_meeting(
     zoom_match = re.search(r'(?:audio|video)(\d{8,})', title)
     if zoom_match:
         zoom_id = zoom_match.group(1)
-        existing = db.query(Meeting).filter(Meeting.title.contains(zoom_id)).first()
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.title.contains(zoom_id),
+            Meeting.status != MeetingStatus.error,
+        ).first()
         if existing:
             return _meeting_dict(existing)  # уже обработана
 
