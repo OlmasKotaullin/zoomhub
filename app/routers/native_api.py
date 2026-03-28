@@ -156,18 +156,17 @@ async def upload_meeting(
     if not title:
         title = Path(file.filename).stem
 
-    # Дедупликация: если zoom_id уже есть в title другой встречи — пропускаем
+    # Дедупликация: если zoom_id уже есть — пропускаем
     import re
     zoom_match = re.search(r'(?:audio|video)(\d{8,})', title)
     if zoom_match:
         zoom_id = zoom_match.group(1)
         existing = db.query(Meeting).filter(
-            Meeting.user_id == user.id,
             Meeting.title.contains(zoom_id),
             Meeting.status != MeetingStatus.error,
         ).first()
         if existing:
-            return _meeting_dict(existing)  # уже обработана
+            return _meeting_dict(existing)
 
     folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
 
@@ -439,6 +438,19 @@ async def agent_upload(
     if not title:
         title = Path(file.filename).stem
 
+    # Дедупликация: если zoom_id уже обработан — вернуть существующую
+    import re
+    zoom_match = re.search(r'(?:audio|video)(\d{8,})', title)
+    if zoom_match:
+        zoom_id = zoom_match.group(1)
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.title.contains(zoom_id),
+            Meeting.status != MeetingStatus.error,
+        ).first()
+        if existing:
+            return {"id": existing.id, "title": existing.title, "status": existing.status.value}
+
     meeting = Meeting(
         user_id=user.id,
         title=title,
@@ -454,8 +466,9 @@ async def agent_upload(
     save_path = save_dir / f"original{ext}"
 
     with open(save_path, "wb") as f:
-        while chunk := await file.read(1024 * 1024):  # 1 MB chunks
+        while chunk := await file.read(1024 * 1024):
             f.write(chunk)
+    await file.close()
 
     meeting.audio_path = str(save_path)
     db.commit()
