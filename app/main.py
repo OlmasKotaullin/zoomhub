@@ -106,6 +106,17 @@ app = FastAPI(title="ZoomHub", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if not request.url.path.startswith("/static"):
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
+
+
 # Логируем все 422 ошибки для отладки загрузки файлов
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse

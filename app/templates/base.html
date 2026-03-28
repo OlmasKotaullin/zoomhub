@@ -7,6 +7,7 @@
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
@@ -392,7 +393,8 @@
         // Render markdown
         container.querySelectorAll('.ai-md-render').forEach(el => {
           if (typeof marked !== 'undefined' && !el.dataset.rendered) {
-            el.innerHTML = marked.parse(el.textContent);
+            const html = marked.parse(el.textContent);
+            el.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
             el.dataset.rendered = '1';
           }
         });

@@ -12,6 +12,10 @@
 {% endfor %}
 <script>
 document.querySelectorAll('.ai-md-render').forEach(el => {
-  if (typeof marked !== 'undefined' && !el.dataset.rendered) { el.innerHTML = marked.parse(el.textContent); el.dataset.rendered = '1'; }
+  if (typeof marked !== 'undefined' && !el.dataset.rendered) {
+    const html = marked.parse(el.textContent);
+    el.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
+    el.dataset.rendered = '1';
+  }
 });
 </script>
