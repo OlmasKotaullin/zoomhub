@@ -3,48 +3,46 @@
 
 {% block content %}
 <style>
-  /* Убираем padding основного контейнера, занимаем всю высоту */
   #mainContent { max-width: 100%; padding: 0; }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .msg-in { animation: msgIn 0.3s ease-out both; }
 </style>
 
 <div class="flex flex-col h-[calc(100vh-0px)]">
 
-  <!-- Область сообщений (скроллится) -->
+  <!-- Область сообщений -->
   <div id="chatScroll" class="flex-1 overflow-y-auto">
     <div class="max-w-3xl mx-auto px-6 pt-6 pb-4">
 
-      <!-- Заголовок (виден когда нет сообщений) -->
+      <!-- Welcome (скрывается при первом сообщении) -->
       <div id="chatWelcome" class="text-center pt-12 pb-8">
         <h1 class="text-[28px] font-extrabold tracking-tight mb-6">
           <span class="text-zoom">zoom</span><span class="text-g-900">Hub</span>
           <span class="ai-shimmer ml-1">AI Companion</span>
         </h1>
-
+        {% set template_icons = {
+          'follow_up': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+          'summary': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>',
+          'protocol': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+          'tasks': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>',
+          'daily': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>'
+        } %}
+        <div class="grid grid-cols-3 gap-2.5 max-w-2xl mx-auto">
+          {% for key, t in chat_templates.items() %}
+          <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
+            class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition-all duration-200 group">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-zoom/50 group-hover:text-zoom transition-colors duration-200">{{ template_icons.get(key, '')|safe }}</span>
+              <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition-colors duration-200">{{ t.name }}</span>
+            </div>
+            <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
+          </button>
+          {% endfor %}
+        </div>
       </div>
 
       <!-- Лента сообщений -->
       <div id="chatThread" class="space-y-4"></div>
-
-      <!-- Карточки шаблонов — ВСЕГДА видны, вне chatWelcome -->
-      {% set template_icons = {
-        'follow_up': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
-        'summary': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>',
-        'protocol': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
-        'tasks': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>',
-        'daily': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>'
-      } %}
-      <div id="templateCards" class="grid grid-cols-3 gap-2.5 max-w-2xl mx-auto mt-4">
-        {% for key, t in chat_templates.items() %}
-        <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
-          class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition-all duration-200 group">
-          <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-zoom/50 group-hover:text-zoom transition-colors duration-200">{{ template_icons.get(key, '')|safe }}</span>
-            <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition-colors duration-200">{{ t.name }}</span>
-          </div>
-          <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
-        </button>
-        {% endfor %}
-      </div>
 
       <!-- Typing indicator -->
       <div id="chatTyping" class="hidden py-3">
@@ -70,7 +68,8 @@
           oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
           class="w-full bg-transparent text-[14px] text-g-800 placeholder-g-400 resize-none outline-none" style="min-height:40px"></textarea>
         <div class="flex items-center justify-between mt-1.5">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Источник -->
             <div class="relative">
               <button onclick="toggleSourceMenu()" class="flex items-center gap-1.5 text-[12px] text-g-500 hover:text-g-700 transition px-2 py-1 rounded-lg hover:bg-g-50">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
@@ -95,13 +94,23 @@
                 {% endif %}
               </div>
             </div>
+            <!-- Разделитель -->
+            <span class="w-px h-4 bg-g-200"></span>
+            <!-- Компактные шаблоны — всегда видны -->
+            {% for key, t in chat_templates.items() %}
+            <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
+              class="text-[11px] text-g-500 hover:text-zoom hover:bg-zoom/5 px-2 py-1 rounded-lg transition-colors duration-150 whitespace-nowrap">
+              {{ t.name }}
+            </button>
+            {% endfor %}
+            <!-- Тег выбранного шаблона -->
             <span id="templateTag" class="hidden text-[11px] text-ai bg-ai/8 px-2 py-0.5 rounded-lg font-medium flex items-center gap-1">
               <span id="templateTagName"></span>
               <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
             </span>
           </div>
           <button onclick="sendMessage()" id="sendBtn" aria-label="Отправить сообщение"
-            class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition-colors duration-200 disabled:opacity-30">
+            class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition-colors duration-200 disabled:opacity-30 flex-shrink-0">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
           </button>
         </div>
@@ -166,7 +175,7 @@ function selectTemplate(key, name, prompt) {
   document.getElementById('templateTagName').textContent = name;
   document.getElementById('templateTag').classList.remove('hidden');
   if (selectedMeetingId || selectedFolderId) sendMessage();
-  else toggleSourceMenu();
+  else sendMessage(); // автоконтекст подтянет все встречи
 }
 
 function clearTemplate() {
@@ -181,23 +190,24 @@ async function sendMessage() {
 
   isSending = true;
 
-  // Скрываем welcome при первом сообщении
+  // Скрываем welcome
   const welcome = document.getElementById('chatWelcome');
   if (welcome) welcome.classList.add('hidden');
 
   const thread = document.getElementById('chatThread');
 
-  // Сообщение пользователя
+  // Сообщение пользователя с анимацией
   const userEl = document.createElement('div');
-  userEl.className = 'flex gap-3';
+  userEl.className = 'flex gap-3 msg-in';
   userEl.innerHTML = '<div class="w-7 h-7 rounded-full bg-zoom/10 flex items-center justify-center text-[10px] font-bold text-zoom flex-shrink-0 mt-0.5">' + userInitial + '</div>' +
     '<div class="text-[13px] text-g-800 font-medium pt-1">' + escapeHtml(message) + '</div>';
   thread.appendChild(userEl);
 
-  // Контейнер ответа AI
+  // Контейнер ответа AI с анимацией
   const streamId = 'stream-' + Date.now();
   const aiEl = document.createElement('div');
-  aiEl.className = 'flex gap-3 zoom-gradient-light rounded-xl px-4 py-4';
+  aiEl.className = 'flex gap-3 zoom-gradient-light rounded-xl px-4 py-4 msg-in';
+  aiEl.style.animationDelay = '0.1s';
   aiEl.innerHTML = '<div class="w-7 h-7 rounded-full bg-ai/12 flex items-center justify-center text-[10px] font-bold text-ai flex-shrink-0 mt-0.5">AI</div>' +
     '<div class="min-w-0 flex-1"><div id="' + streamId + '" class="text-[13px] text-g-700 leading-relaxed ai-md"></div></div>';
   thread.appendChild(aiEl);
