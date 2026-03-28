@@ -395,7 +395,8 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
                         tasks_str = "\n".join(f"  - {t.get('task', '')}" for t in m.summary.tasks[:10])
                         entry += f"\nЗадачи ({len(m.summary.tasks)}):\n{tasks_str}"
                     if m.summary.topics:
-                        entry += f"\nТемы: {', '.join(m.summary.topics[:5])}"
+                        topic_names = [t if isinstance(t, str) else t.get('topic', t.get('name', str(t))) for t in m.summary.topics[:5]]
+                        entry += f"\nТемы: {', '.join(topic_names)}"
                 parts.append(entry)
                 if len("\n".join(parts)) > 60000:
                     break
