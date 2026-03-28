@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import templates, get_current_user_optional, get_user_meeting, get_user_folder
-from app.models import Meeting, Folder, ChatMessage, ChatRole
+from app.models import Meeting, MeetingStatus, Folder, ChatMessage, ChatRole
 from app.services.chat_engine import (
     ask_about_meeting, ask_about_folder,
     _build_meeting_context, MEETING_SYSTEM, FOLDER_SYSTEM, MAX_HISTORY,
