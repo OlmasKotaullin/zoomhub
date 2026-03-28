@@ -191,6 +191,12 @@ async function sendMessage() {
   const message = input.value.trim();
   if (!message || isSending) return;
 
+  // Шаблон без источника → открыть меню выбора
+  if (selectedTemplate && !selectedMeetingId && !selectedFolderId) {
+    toggleSourceMenu();
+    return;
+  }
+
   isSending = true;
 
   // Скрываем welcome
