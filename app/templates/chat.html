@@ -22,12 +22,19 @@
 
         <!-- Карточки шаблонов -->
         <div id="templateCards" class="grid grid-cols-3 gap-2.5 max-w-2xl mx-auto">
+          {% set template_icons = {
+            'follow_up': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+            'summary': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>',
+            'protocol': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+            'tasks': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>',
+            'daily': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>'
+          } %}
           {% for key, t in chat_templates.items() %}
           <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
-            class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition group">
+            class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition-all duration-200 group">
             <div class="flex items-center gap-2 mb-1.5">
-              <span class="text-[16px]">{{ t.icon }}</span>
-              <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition">{{ t.name }}</span>
+              <span class="text-zoom/50 group-hover:text-zoom transition-colors duration-200">{{ template_icons.get(key, '') }}</span>
+              <span class="text-[13px] font-semibold text-g-800 group-hover:text-zoom transition-colors duration-200">{{ t.name }}</span>
             </div>
             <p class="text-[11px] text-g-400 leading-relaxed">{{ t.description }}</p>
           </button>
@@ -57,7 +64,7 @@
     <div class="max-w-3xl mx-auto px-6 py-3">
       <div class="z-card p-3">
         <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
-        <textarea id="chatInput" rows="1" placeholder="Напишите сообщение..."
+        <textarea id="chatInput" rows="1" placeholder="Напишите сообщение..." aria-label="Сообщение AI-ассистенту"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
           oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
           class="w-full bg-transparent text-[14px] text-g-800 placeholder-g-400 resize-none outline-none" style="min-height:40px"></textarea>
@@ -71,8 +78,9 @@
               <div id="sourceMenu" class="hidden absolute bottom-full left-0 mb-1 bg-white rounded-xl border border-g-100 shadow-lg py-1.5 z-50 min-w-[260px] max-h-[300px] overflow-y-auto">
                 <p class="px-3 py-1 text-[10px] font-semibold text-g-400 uppercase tracking-wider">Встречи</p>
                 {% for m in meetings %}
-                <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition truncate">
-                  📅 {{ m.title|truncate(45) }}
+                <button onclick='selectMeeting({{ m.id }}, {{ m.title|truncate(40)|tojson }})' class="w-full text-left px-3 py-1.5 text-[12px] text-g-600 hover:bg-g-50 transition-colors duration-150 truncate flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 text-g-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                  <span class="truncate">{{ m.title|truncate(45) }}</span>
                 </button>
                 {% endfor %}
                 {% if folders %}
@@ -91,8 +99,8 @@
               <button onclick="clearTemplate()" class="text-ai/50 hover:text-ai">&times;</button>
             </span>
           </div>
-          <button onclick="sendMessage()" id="sendBtn"
-            class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition disabled:opacity-30">
+          <button onclick="sendMessage()" id="sendBtn" aria-label="Отправить сообщение"
+            class="w-8 h-8 rounded-full bg-zoom flex items-center justify-center hover:bg-zoom-hover transition-colors duration-200 disabled:opacity-30">
             <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
           </button>
         </div>
