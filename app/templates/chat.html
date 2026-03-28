@@ -177,6 +177,7 @@ function selectTemplate(key, name, prompt) {
   if (selectedMeetingId || selectedFolderId) {
     sendMessage();
   } else {
+    document.getElementById('chatInput').blur();
     toggleSourceMenu();
   }
 }
@@ -191,8 +192,9 @@ async function sendMessage() {
   const message = input.value.trim();
   if (!message || isSending) return;
 
-  // Шаблон без источника → открыть меню выбора
+  // Шаблон без источника → открыть меню выбора, снять фокус
   if (selectedTemplate && !selectedMeetingId && !selectedFolderId) {
+    input.blur();
     toggleSourceMenu();
     return;
   }
