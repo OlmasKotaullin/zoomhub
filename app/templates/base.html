@@ -58,6 +58,11 @@
     .z-card { background: white; border-radius: 16px; border: 1px solid #eef1f6; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: all 0.2s; }
     .z-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); border-color: #dde3ed; }
 
+    /* Accessibility & Interaction */
+    button, a, [role="button"], [onclick] { cursor: pointer; }
+    :focus-visible { outline: 2px solid #0b5cff; outline-offset: 2px; border-radius: 4px; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+
     /* AI badge shimmer */
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     .ai-shimmer { background: linear-gradient(90deg, #6e56cf 0%, #0b5cff 50%, #6e56cf 100%); background-size: 200% 100%; animation: shimmer 3s ease infinite; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
