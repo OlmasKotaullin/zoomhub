@@ -132,8 +132,11 @@ async def upload_meeting(
     meeting_dir.mkdir(parents=True, exist_ok=True)
     file_path = meeting_dir / f"original{ext}"
 
+    # Стримим на диск чанками — не грузим целиком в RAM
     with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        while chunk := await file.read(1024 * 1024):  # 1 МБ чанки
+            f.write(chunk)
+    await file.close()
 
     meeting.audio_path = str(file_path)
     db.commit()
