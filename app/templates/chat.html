@@ -174,8 +174,11 @@ function selectTemplate(key, name, prompt) {
   document.getElementById('chatInput').value = prompt;
   document.getElementById('templateTagName').textContent = name;
   document.getElementById('templateTag').classList.remove('hidden');
-  if (selectedMeetingId || selectedFolderId) sendMessage();
-  else sendMessage(); // автоконтекст подтянет все встречи
+  if (selectedMeetingId || selectedFolderId) {
+    sendMessage();
+  } else {
+    toggleSourceMenu();
+  }
 }
 
 function clearTemplate() {
