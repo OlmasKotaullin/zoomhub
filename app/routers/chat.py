@@ -377,30 +377,22 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
         else:
             fid = None  # папка не найдена или не принадлежит пользователю
     else:
-        # Автоконтекст: если ничего не выбрано — собираем обзор всех встреч пользователя
+        # Автоконтекст: краткий обзор последних встреч (компактный, для rate-limited LLM)
         all_meetings = db.query(Meeting).filter(
             Meeting.user_id == user.id,
             Meeting.status == MeetingStatus.ready,
-        ).order_by(Meeting.created_at.desc()).limit(30).all()
+        ).order_by(Meeting.created_at.desc()).limit(15).all()
         if all_meetings:
-            parts = [f"У пользователя {len(all_meetings)} встреч. Вот их обзор:"]
+            lines = [f"Встречи пользователя ({len(all_meetings)}):"]
             for m in all_meetings:
-                info = f"\n---\n**{m.title}** (ID:{m.id}, {m.date.strftime('%d.%m.%Y %H:%M') if m.date else ''})"
+                line = f"- {m.title} | {m.date.strftime('%d.%m.%Y') if m.date else '?'}"
                 if m.folder:
-                    info += f" | Папка: {m.folder.name}"
+                    line += f" | {m.folder.name}"
                 if m.summary and m.summary.tldr:
-                    info += f"\n{m.summary.tldr}"
-                    if m.summary.tasks:
-                        info += f"\nЗадачи ({len(m.summary.tasks)}): " + "; ".join(t.get('task', '')[:60] for t in m.summary.tasks[:5])
-                parts.append(info)
-                if len("\n".join(parts)) > 80000:
-                    break
-            context = "\n".join(parts)
-            system = """Ты — AI-ассистент ZoomHub. У тебя есть доступ ко всем встречам пользователя.
-Отвечай на вопросы по встречам: резюме за день/неделю, поиск задач, поиск по темам.
-Если пользователь спрашивает про конкретную дату — найди встречи за эту дату в контексте.
-Если спрашивает общий вопрос — используй все доступные данные.
-Отвечай на русском, кратко и структурированно."""
+                    line += f" | {m.summary.tldr[:150]}"
+                lines.append(line)
+            context = "\n".join(lines)
+            system = "Ты — AI-ассистент ZoomHub. Отвечай по встречам пользователя из контекста. Если спрашивают про дату — найди встречи за эту дату. Отвечай кратко, на русском."
 
     # LLM messages
     llm_messages = []
