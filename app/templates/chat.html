@@ -132,6 +132,17 @@ function scrollDown() {
   el.scrollTop = el.scrollHeight;
 }
 
+function renderMd(text) {
+  if (typeof marked === 'undefined') return text;
+  // Починка невалидных таблиц: нормализуем разделители
+  const fixed = text.replace(/\|([:\- ]+\|)+/g, function(m) {
+    // Нормализуем каждый сегмент разделителя до | --- |
+    return m.replace(/[:\- ]+(?=\|)/g, ' --- ');
+  });
+  const html = marked.parse(fixed);
+  return typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
+}
+
 function toggleSourceMenu() {
   document.getElementById('sourceMenu').classList.toggle('hidden');
 }
@@ -257,24 +268,29 @@ async function sendMessage() {
         if (!p.startsWith('data: ')) continue;
         try {
           const d = JSON.parse(p.slice(6));
-          if (d.done) break;
+          if (d.done) { if (d.message_id) actionsEl._msgId = d.message_id; break; }
           if (d.error) { fullText += '\n\n**Ошибка:** ' + d.error; continue; }
           if (d.content) {
             fullText += d.content;
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => {
-              contentEl.innerHTML = typeof marked !== 'undefined' ? marked.parse(fullText) : fullText;
+              contentEl.innerHTML = renderMd(fullText);
               scrollDown();
             }, 50);
           }
         } catch(e) {}
       }
     }
-    if (typeof marked !== 'undefined' && fullText) contentEl.innerHTML = marked.parse(fullText);
+    if (fullText) contentEl.innerHTML = renderMd(fullText);
 
-    actionsEl.innerHTML = '<button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>';
+    const btnClass = 'flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50';
+    actionsEl.innerHTML =
+      '<button class="' + btnClass + '" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>' +
+      '<button class="' + btnClass + '" onclick="editThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Редактировать</button>' +
+      '<button class="' + btnClass + ' hover:text-err hover:bg-err/5" onclick="deleteMsg(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Удалить</button>';
     actionsEl.classList.remove('hidden');
     actionsEl._text = fullText;
+    actionsEl._contentEl = contentEl;
   } catch(e) {
     document.getElementById(streamId).textContent = 'Ошибка соединения.';
   }
@@ -293,6 +309,171 @@ function copyThis(btn) {
     btn.innerHTML = btn.innerHTML.replace('Копировать', 'Скопировано!');
     setTimeout(() => btn.innerHTML = orig, 1500);
   });
+}
+
+function editThis(btn) {
+  const actions = btn.closest('div');
+  const contentEl = actions._contentEl;
+  if (!contentEl) return;
+
+  // Сохраняем оригинал
+  actions._origHtml = contentEl.innerHTML;
+  actions._origText = actions._text;
+
+  // Заменяем rendered HTML на textarea с markdown-исходником
+  const ta = document.createElement('textarea');
+  ta.value = actions._text || contentEl.innerText;
+  ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
+  ta.style.minHeight = '120px';
+  ta.style.maxHeight = '400px';
+  // Автовысота
+  ta.style.height = Math.min(400, Math.max(120, ta.value.split('\n').length * 20 + 40)) + 'px';
+  contentEl.style.display = 'none';
+  contentEl.parentElement.insertBefore(ta, contentEl.nextSibling);
+  actions._textarea = ta;
+  ta.focus();
+
+  // Escape для отмены
+  ta._editActions = actions;
+  ta.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { cancelEditByActions(actions); }
+  });
+
+  // Заменяем кнопки на Сохранить / Отмена
+  const btnClass = 'flex items-center gap-1.5 text-[11px] transition px-2 py-1 rounded-lg';
+  actions.innerHTML =
+    '<button class="' + btnClass + ' text-white bg-zoom hover:bg-zoom/90" onclick="saveEdit(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Сохранить</button>' +
+    '<button class="' + btnClass + ' text-g-400 hover:text-g-600 hover:bg-g-50" onclick="cancelEdit(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Отмена</button>';
+  actions._contentEl = contentEl;
+}
+
+async function saveEdit(btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const actions = btn.closest('div');
+  const contentEl = actions._contentEl;
+  const msgId = actions._msgId;
+  if (!contentEl) { btn.disabled = false; return; }
+
+  const ta = actions._textarea;
+  const newText = (ta ? ta.value : contentEl.innerText).trim();
+  if (!newText) { cancelEdit(btn); return; }
+
+  // Сохраняем на сервер (до обновления UI — чтобы откатить при ошибке)
+  if (msgId) {
+    try {
+      const resp = await fetch('/api/chat/messages/' + msgId, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content: newText}),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || 'Ошибка сохранения');
+      }
+    } catch(e) {
+      console.error('Ошибка сохранения:', e);
+      // Откат — убираем textarea, возвращаем оригинал
+      if (ta && ta.parentElement) ta.remove();
+      actions._textarea = null;
+      contentEl.style.display = '';
+      contentEl.innerHTML = actions._origHtml || '';
+      restoreActionButtons(actions);
+      // Уведомляем
+      const toast = document.createElement('div');
+      toast.className = 'text-[11px] text-err ml-10 mb-2';
+      toast.textContent = 'Не удалось сохранить: ' + e.message;
+      actions.after(toast);
+      setTimeout(() => toast.remove(), 4000);
+      return;
+    }
+  }
+
+  // Убираем textarea, показываем contentEl
+  if (ta && ta.parentElement) ta.remove();
+  contentEl.style.display = '';
+
+  // Рендерим markdown
+  contentEl.innerHTML = renderMd(newText);
+
+  // Добавляем метку «изменено» внутри контейнера сообщения
+  const msgContainer = contentEl.closest('.flex.gap-3') || contentEl.parentElement;
+  let editedLabel = msgContainer.querySelector('.edited-label');
+  if (!editedLabel) {
+    editedLabel = document.createElement('span');
+    editedLabel.className = 'edited-label text-[10px] text-g-400 italic mt-1 block';
+    contentEl.after(editedLabel);
+  }
+  editedLabel.textContent = 'изменено';
+
+  // Восстанавливаем кнопки
+  actions._text = newText;
+  actions._msgId = msgId;
+  restoreActionButtons(actions);
+}
+
+function restoreActionButtons(actions) {
+  const btnClass = 'flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50';
+  const contentEl = actions._contentEl;
+  actions.innerHTML =
+    '<button class="' + btnClass + '" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>' +
+    '<button class="' + btnClass + '" onclick="editThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Редактировать</button>' +
+    '<button class="' + btnClass + ' hover:text-err hover:bg-err/5" onclick="deleteMsg(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Удалить</button>';
+  actions._contentEl = contentEl;
+}
+
+async function deleteMsg(btn) {
+  const actions = btn.closest('div');
+  const msgId = actions._msgId;
+  if (!msgId) { // Если нет msgId — просто удаляем из DOM
+    const aiEl = actions.previousElementSibling;
+    const userEl = aiEl ? aiEl.previousElementSibling : null;
+    if (aiEl) aiEl.remove();
+    if (userEl && userEl.querySelector('.text-g-800')) userEl.remove();
+    actions.remove();
+    return;
+  }
+  if (!confirm('Удалить этот ответ?')) return;
+  try {
+    const resp = await fetch('/api/chat/messages/' + msgId, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('Ошибка удаления');
+    // Удаляем из DOM: actions + AI-блок + user-блок
+    const aiEl = actions.previousElementSibling;
+    const userEl = aiEl ? aiEl.previousElementSibling : null;
+    // Удаляем метку edited если есть
+    const edited = actions.previousElementSibling?.querySelector?.('.edited-label');
+    if (aiEl) aiEl.remove();
+    if (userEl && userEl.querySelector('.text-g-800')) userEl.remove();
+    actions.remove();
+  } catch(e) {
+    const toast = document.createElement('div');
+    toast.className = 'text-[11px] text-err ml-10 mb-2';
+    toast.textContent = 'Не удалось удалить: ' + e.message;
+    actions.after(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
+}
+
+function cancelEdit(btn) {
+  if (!btn) return;
+  cancelEditByActions(btn.closest('div'));
+}
+
+function cancelEditByActions(actions) {
+  if (!actions) return;
+  const contentEl = actions._contentEl;
+  if (!contentEl) return;
+
+  // Убираем textarea
+  const ta = actions._textarea;
+  if (ta && ta.parentElement) ta.remove();
+  actions._textarea = null;
+  contentEl.style.display = '';
+
+  contentEl.innerHTML = actions._origHtml || '';
+
+  actions._text = actions._origText || '';
+  restoreActionButtons(actions);
 }
 
 function escapeHtml(t) {

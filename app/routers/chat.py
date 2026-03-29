@@ -6,8 +6,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import templates, get_current_user_optional, get_user_meeting, get_user_folder
-from app.models import Meeting, MeetingStatus, Folder, ChatMessage, ChatRole
+from app.deps import templates, get_current_user, get_current_user_optional, get_user_meeting, get_user_folder
+from app.models import Meeting, MeetingStatus, Folder, ChatMessage, ChatRole, User
 from app.services.chat_engine import (
     ask_about_meeting, ask_about_folder,
     _build_meeting_context, MEETING_SYSTEM, FOLDER_SYSTEM, MAX_HISTORY,
@@ -208,6 +208,7 @@ async def chat_meeting(
 
     # Сохраняем вопрос пользователя
     user_msg = ChatMessage(
+        user_id=user.id,
         meeting_id=meeting_id,
         role=ChatRole.user,
         content=message,
@@ -255,6 +256,7 @@ async def chat_folder(
     folder = get_user_folder(folder_id, user, db)
 
     user_msg = ChatMessage(
+        user_id=user.id,
         folder_id=folder_id,
         role=ChatRole.user,
         content=message,
@@ -436,7 +438,7 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     llm_messages.append({"role": "user", "content": message})
 
     # Сохраняем user message
-    user_msg = ChatMessage(meeting_id=mid, folder_id=fid, role=ChatRole.user, content=message)
+    user_msg = ChatMessage(user_id=user.id, meeting_id=mid, folder_id=fid, role=ChatRole.user, content=message)
     db.add(user_msg)
     db.commit()
 
@@ -482,22 +484,121 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
         save_db = SessionLocal()
         try:
             assistant_msg = ChatMessage(
-                meeting_id=mid, folder_id=fid,
+                user_id=user.id, meeting_id=mid, folder_id=fid,
                 role=ChatRole.assistant,
                 content=full_response or "Ошибка генерации",
             )
             save_db.add(assistant_msg)
             save_db.commit()
+            saved_msg_id = assistant_msg.id
         except Exception as e:
             logger.error(f"Ошибка сохранения ответа: {e}")
             save_db.rollback()
+            saved_msg_id = None
         finally:
             save_db.close()
 
-        yield f"data: {json.dumps({'done': True})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'message_id': saved_msg_id})}\n\n"
 
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---- Редактирование AI-сообщений ----
+
+@router.put("/api/chat/messages/{message_id}")
+async def update_chat_message(
+    message_id: int,
+    request: Request,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    body = await request.json()
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(400, "Текст не может быть пустым")
+    if len(content) > 50000:
+        raise HTTPException(400, "Текст слишком длинный")
+
+    msg = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено")
+
+    if msg.role != ChatRole.assistant:
+        raise HTTPException(403, "Можно редактировать только AI-ответы")
+
+    # Проверяем ownership: напрямую через user_id или через meeting/folder
+    owned = False
+    if msg.user_id and msg.user_id == user.id:
+        owned = True
+    elif msg.meeting_id:
+        meeting = db.query(Meeting).filter(Meeting.id == msg.meeting_id).first()
+        if meeting and meeting.user_id == user.id:
+            owned = True
+    elif msg.folder_id:
+        folder = db.query(Folder).filter(Folder.id == msg.folder_id).first()
+        if folder and folder.user_id == user.id:
+            owned = True
+    if not owned:
+        raise HTTPException(403, "Нет доступа")
+
+    from datetime import datetime, timezone
+    msg.content = content
+    msg.edited_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"ok": True, "edited_at": msg.edited_at.isoformat()}
+
+
+# ---- Удаление AI-сообщений ----
+
+@router.delete("/api/chat/messages/{message_id}")
+async def delete_chat_message(
+    message_id: int,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    msg = db.query(ChatMessage).filter(ChatMessage.id == message_id).first()
+    if not msg:
+        raise HTTPException(404, "Сообщение не найдено")
+
+    if msg.role != ChatRole.assistant:
+        raise HTTPException(403, "Можно удалить только AI-ответы")
+
+    # Проверяем ownership
+    owned = False
+    if msg.user_id and msg.user_id == user.id:
+        owned = True
+    elif msg.meeting_id:
+        meeting = db.query(Meeting).filter(Meeting.id == msg.meeting_id).first()
+        if meeting and meeting.user_id == user.id:
+            owned = True
+    elif msg.folder_id:
+        folder = db.query(Folder).filter(Folder.id == msg.folder_id).first()
+        if folder and folder.user_id == user.id:
+            owned = True
+    if not owned:
+        raise HTTPException(403, "Нет доступа")
+
+    # Удаляем также предшествующее user-сообщение (пару вопрос-ответ)
+    prev_user_msg = (
+        db.query(ChatMessage)
+        .filter(
+            ChatMessage.id < msg.id,
+            ChatMessage.role == ChatRole.user,
+            ChatMessage.meeting_id == msg.meeting_id,
+            ChatMessage.folder_id == msg.folder_id,
+        )
+        .order_by(ChatMessage.id.desc())
+        .first()
+    )
+
+    db.delete(msg)
+    if prev_user_msg:
+        db.delete(prev_user_msg)
+    db.commit()
+
+    return {"ok": True}

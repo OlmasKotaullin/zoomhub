@@ -1,14 +1,25 @@
 {% for msg in messages %}
-<div class="flex gap-3 {% if msg.role.value == 'assistant' %}zoom-gradient-light -mx-4 px-4 py-3 rounded-xl{% endif %}">
+<div class="flex gap-3 {% if msg.role.value == 'assistant' %}zoom-gradient-light -mx-4 px-4 py-3 rounded-xl{% endif %}" data-msg-id="{{ msg.id }}">
   <div class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 {% if msg.role.value == 'user' %}bg-g-100 text-g-600{% else %}bg-ai/12 text-ai{% endif %}">
     {% if msg.role.value == 'user' %}Я{% else %}AI{% endif %}
   </div>
-  {% if msg.role.value == 'assistant' %}
-  <div class="text-[13px] text-g-700 leading-relaxed pt-0.5 ai-md ai-md-render min-w-0">{{ msg.content }}</div>
-  {% else %}
-  <div class="text-[13px] text-g-800 leading-relaxed pt-0.5 font-semibold">{{ msg.content }}</div>
-  {% endif %}
+  <div class="min-w-0 flex-1">
+    {% if msg.role.value == 'assistant' %}
+    <div id="msg-content-{{ msg.id }}" class="text-[13px] text-g-700 leading-relaxed pt-0.5 ai-md ai-md-render">{{ msg.content }}</div>
+    <script type="application/json" id="msg-md-{{ msg.id }}">{{ msg.content|tojson }}</script>
+    {% if msg.edited_at %}<span class="edited-label text-[10px] text-g-400 italic mt-1 block">изменено</span>{% endif %}
+    {% else %}
+    <div class="text-[13px] text-g-800 leading-relaxed pt-0.5 font-semibold">{{ msg.content }}</div>
+    {% endif %}
+  </div>
 </div>
+{% if msg.role.value == 'assistant' %}
+<div class="flex items-center gap-1 ml-10 mb-2 history-actions" data-history-msg-id="{{ msg.id }}">
+  <button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>
+  <button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50" onclick="editThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Редактировать</button>
+  <button class="flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 hover:text-err hover:bg-err/5 transition px-2 py-1 rounded-lg hover:bg-g-50" onclick="deleteMsg(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Удалить</button>
+</div>
+{% endif %}
 {% endfor %}
 <script>
 document.querySelectorAll('.ai-md-render').forEach(el => {
@@ -16,6 +27,18 @@ document.querySelectorAll('.ai-md-render').forEach(el => {
     const html = marked.parse(el.textContent);
     el.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
     el.dataset.rendered = '1';
+  }
+});
+// Привязываем _contentEl и _msgId к кнопкам истории
+document.querySelectorAll('.history-actions').forEach(actions => {
+  const msgId = actions.dataset.historyMsgId;
+  const contentEl = document.getElementById('msg-content-' + msgId);
+  if (contentEl) {
+    actions._contentEl = contentEl;
+    actions._msgId = parseInt(msgId);
+    const mdEl = document.getElementById('msg-md-' + msgId);
+    try { actions._text = mdEl ? JSON.parse(mdEl.textContent) : contentEl.textContent; }
+    catch(e) { actions._text = contentEl.textContent; }
   }
 });
 </script>

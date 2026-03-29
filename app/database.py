@@ -84,6 +84,14 @@ def init_db():
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code_id INTEGER",
                 ]
 
+            # chat_messages: user_id, edited_at
+            if insp.has_table("chat_messages"):
+                chat_cols = {col["name"] for col in insp.get_columns("chat_messages")}
+                if "edited_at" not in chat_cols:
+                    migrations.append("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP")
+                if "user_id" not in chat_cols:
+                    migrations.append("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)")
+
             for sql in migrations:
                 c.execute(text(sql))
             if migrations:

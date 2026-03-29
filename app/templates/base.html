@@ -7,6 +7,7 @@
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>if(typeof marked!=='undefined')marked.setOptions({gfm:true,breaks:true});</script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -89,6 +90,9 @@
     .ai-md code { background:#f0f0f5; padding:0.15em 0.35em; border-radius:5px; font-size:0.87em; color:#6e56cf; font-family: 'SF Mono', Monaco, monospace; }
     .ai-md pre { background:#f7f9fc; border:1.5px solid #eef1f6; padding:0.7em; border-radius:12px; overflow-x:auto; }
     .ai-md blockquote { border-left:3px solid #0b5cff; padding-left:0.8em; color:#6b7a94; }
+    .ai-md table { width:100%; border-collapse:collapse; margin:0.5em 0; font-size:0.88em; table-layout:auto; }
+    .ai-md th { background:rgba(0,0,0,0.04); font-weight:600; text-align:left; padding:0.45em 0.7em; border:1px solid rgba(0,0,0,0.08); color:#374151; }
+    .ai-md td { padding:0.4em 0.7em; border:1px solid rgba(0,0,0,0.06); color:#4b5563; }
 
     ::selection { background: #c5d8ff; }
   </style>
@@ -416,6 +420,139 @@
   function scrollChat() {
     const el = document.getElementById('globalChatMessages');
     el.scrollTop = el.scrollHeight;
+  }
+
+  // --- Глобальные функции копирования/редактирования (для history partials) ---
+  if (typeof window.copyThis === 'undefined') {
+    window.copyThis = function(btn) {
+      const text = btn.closest('div')._text || '';
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = btn.innerHTML.replace('Копировать', 'Скопировано!');
+        setTimeout(() => btn.innerHTML = orig, 1500);
+      });
+    };
+  }
+
+  if (typeof window.editThis === 'undefined') {
+    window.editThis = function(btn) {
+      const actions = btn.closest('div');
+      const contentEl = actions._contentEl;
+      if (!contentEl) return;
+      actions._origHtml = contentEl.innerHTML;
+      actions._origText = actions._text;
+      const ta = document.createElement('textarea');
+      ta.value = actions._text || contentEl.innerText;
+      ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
+      ta.style.minHeight = '120px'; ta.style.maxHeight = '400px';
+      ta.style.height = Math.min(400, Math.max(120, ta.value.split('\n').length * 20 + 40)) + 'px';
+      contentEl.style.display = 'none';
+      contentEl.parentElement.insertBefore(ta, contentEl.nextSibling);
+      actions._textarea = ta;
+      ta.focus();
+      ta.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') window._cancelEditByActions(actions);
+      });
+      const bc = 'flex items-center gap-1.5 text-[11px] transition px-2 py-1 rounded-lg';
+      actions.innerHTML =
+        '<button class="' + bc + ' text-white bg-zoom hover:bg-zoom/90" onclick="window._saveEdit(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Сохранить</button>' +
+        '<button class="' + bc + ' text-g-400 hover:text-g-600 hover:bg-g-50" onclick="window._cancelEditBtn(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Отмена</button>';
+      actions._contentEl = contentEl;
+    };
+  }
+
+  window._cancelEditBtn = function(btn) { if (btn) window._cancelEditByActions(btn.closest('div')); };
+  window._cancelEditByActions = function(actions) {
+    if (!actions) return;
+    const contentEl = actions._contentEl;
+    if (!contentEl) return;
+    const ta = actions._textarea;
+    if (ta && ta.parentElement) ta.remove();
+    actions._textarea = null;
+    contentEl.style.display = '';
+    contentEl.innerHTML = actions._origHtml || '';
+    actions._text = actions._origText || '';
+    window._restoreHistoryButtons(actions);
+  };
+  window._saveEdit = async function(btn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const actions = btn.closest('div');
+    const contentEl = actions._contentEl;
+    const msgId = actions._msgId;
+    const ta = actions._textarea;
+    if (!contentEl) { btn.disabled = false; return; }
+    const newText = (ta ? ta.value : contentEl.innerText).trim();
+    if (!newText) { window._cancelEditByActions(actions); return; }
+    if (msgId) {
+      try {
+        const resp = await fetch('/api/chat/messages/' + msgId, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:newText}) });
+        if (!resp.ok) throw new Error((await resp.json().catch(()=>({}))).detail || 'Ошибка');
+      } catch(e) {
+        btn.disabled = false;
+        if (ta && ta.parentElement) ta.remove();
+        actions._textarea = null;
+        contentEl.style.display = '';
+        contentEl.innerHTML = actions._origHtml || '';
+        window._restoreHistoryButtons(actions);
+        const toast = document.createElement('div');
+        toast.className = 'text-[11px] text-err ml-10 mb-2';
+        toast.textContent = 'Не удалось сохранить: ' + e.message;
+        actions.after(toast); setTimeout(() => toast.remove(), 4000);
+        return;
+      }
+    }
+    if (ta && ta.parentElement) ta.remove();
+    actions._textarea = null;
+    contentEl.style.display = '';
+    if (typeof marked !== 'undefined') {
+      const html = marked.parse(newText);
+      contentEl.innerHTML = typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(html) : html;
+    }
+    const mc = contentEl.closest('.flex.gap-3') || contentEl.parentElement;
+    let lb = mc.querySelector('.edited-label');
+    if (!lb) { lb = document.createElement('span'); lb.className = 'edited-label text-[10px] text-g-400 italic mt-1 block'; contentEl.after(lb); }
+    lb.textContent = 'изменено';
+    actions._text = newText;
+    actions._msgId = msgId;
+    window._restoreHistoryButtons(actions);
+  };
+  window._restoreHistoryButtons = function(actions) {
+    const bc = 'flex items-center gap-1.5 text-[11px] text-g-400 hover:text-g-600 transition px-2 py-1 rounded-lg hover:bg-g-50';
+    const contentEl = actions._contentEl;
+    actions.innerHTML =
+      '<button class="' + bc + '" onclick="copyThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Копировать</button>' +
+      '<button class="' + bc + '" onclick="editThis(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Редактировать</button>' +
+      '<button class="' + bc + ' hover:text-err hover:bg-err/5" onclick="deleteMsg(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Удалить</button>';
+    actions._contentEl = contentEl;
+  };
+
+  // Глобальная deleteMsg для history partials
+  if (typeof window.deleteMsg === 'undefined') {
+    window.deleteMsg = async function(btn) {
+      const actions = btn.closest('div');
+      const msgId = actions._msgId;
+      if (!msgId) {
+        const aiEl = actions.previousElementSibling;
+        const userEl = aiEl ? aiEl.previousElementSibling : null;
+        if (aiEl) aiEl.remove();
+        if (userEl) userEl.remove();
+        actions.remove();
+        return;
+      }
+      if (!confirm('Удалить этот ответ?')) return;
+      try {
+        const resp = await fetch('/api/chat/messages/' + msgId, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Ошибка');
+        const aiEl = actions.previousElementSibling;
+        const userEl = aiEl ? aiEl.previousElementSibling : null;
+        if (aiEl) aiEl.remove();
+        if (userEl) userEl.remove();
+        actions.remove();
+      } catch(e) {
+        alert('Не удалось удалить: ' + e.message);
+      }
+    };
   }
   </script>
 

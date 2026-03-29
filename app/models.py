@@ -155,12 +155,15 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=True)
     folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True)
     role = Column(Enum(ChatRole), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=utcnow)
+    edited_at = Column(DateTime, nullable=True, default=None)
 
+    user = relationship("User")
     meeting = relationship("Meeting", back_populates="chat_messages")
     folder = relationship("Folder", back_populates="chat_messages")
 
