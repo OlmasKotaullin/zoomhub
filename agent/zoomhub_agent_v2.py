@@ -7,6 +7,7 @@
 
 import argparse
 import asyncio
+import fcntl
 import json
 import platform
 import sys
@@ -16,6 +17,22 @@ from pathlib import Path
 
 import httpx
 
+LOCK_FILE = Path.home() / ".zoomhub" / "agent.lock"
+
+
+def acquire_lock():
+    """Предотвращает запуск нескольких копий агента."""
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_fd.write(str(os.getpid()))
+        lock_fd.flush()
+        return lock_fd
+    except OSError:
+        print("⚠️  Другой экземпляр агента уже запущен. Выход.", flush=True)
+        sys.exit(0)
+
 EXTENSIONS = {".mp4", ".m4a", ".mp3", ".wav", ".webm", ".ogg"}
 POLL_INTERVAL = 30
 STABLE_WAIT = 10
@@ -24,6 +41,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 STATE_FILE = ".zoomhub-agent-state.json"
 
 # Telegram credentials for Bukvitsa (shared, non-secret — это ID приложения, не токен)
+import os
 import os as _os
 DEFAULT_API_ID = int(_os.environ.get("TG_API_ID", "20610877"))
 DEFAULT_API_HASH = _os.environ.get("TG_API_HASH", "06a021c0c0046cd67085dd7452deaaf8")
@@ -209,7 +227,6 @@ async def process_file(filepath: Path, cfg: dict) -> bool:
 
     except Exception as e:
         print(f"  ⚠️  Ошибка Буквицы: {e}", flush=True)
-        print(f"  📤 Fallback: загрузка аудио на сервер...", flush=True)
         return upload_audio_fallback(server, token, filepath)
 
 
@@ -346,6 +363,12 @@ async def main_async():
                 success = await process_file(filepath, cfg)
                 if success:
                     processed.add(fh)
+                    # Помечаем двойник (audio↔video) как обработанный
+                    zid = _extract_zoom_id(filepath.name)
+                    if zid:
+                        for sibling in filepath.parent.iterdir():
+                            if sibling != filepath and _extract_zoom_id(sibling.name) == zid:
+                                processed.add(file_hash(sibling))
                     save_state(state_path, processed)
 
         if args.once:
@@ -355,6 +378,7 @@ async def main_async():
 
 
 def main():
+    _lock = acquire_lock()  # Предотвращаем двойной запуск
     # If no config and no CLI args → open GUI setup
     cfg = load_config()
     if not cfg.get("token") and len(sys.argv) == 1:
