@@ -79,6 +79,12 @@ class User(Base):
     user_gemini_api_key = Column(String(500), nullable=True)
     user_anthropic_api_key = Column(String(500), nullable=True)
     user_openai_api_key = Column(String(500), nullable=True)
+    # Claude Panel customization
+    claude_system_prompt = Column(Text, nullable=True)
+    claude_memories = Column(JSON, default=list)
+    claude_active_skills = Column(JSON, default=list)
+    claude_knowledge_text = Column(Text, nullable=True)
+    claude_bridge_token = Column(String(500), nullable=True)
     # Onboarding
     onboarding_completed = Column(Boolean, default=False)
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)

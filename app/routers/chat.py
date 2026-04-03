@@ -18,6 +18,65 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ---- Скиллы пользователя ----
+
+SKILL_PROMPTS = {
+    "marketing_strategist": """## СКИЛЛ: Маркетолог-стратег
+Анализируй встречи как опытный маркетолог. Используй:
+- Фреймворк «Знаю → Хочу → Верю → Плачу» для оценки воронки
+- 4-блочный аудит: продажи, юнит-экономика, воронки, трафик
+- Дорожная карта: аудитория/продукт → упаковка/реклама → инфраструктура
+- Квалификация лидов A/B/C/D
+- Конкретные рекомендации с цифрами и ЦКП (ценный конечный продукт)
+- Диагностика: CPL, CAC, LTV, конверсии, средний чек""",
+
+    "sales_analyst": """## СКИЛЛ: Аналитик продаж
+Анализируй встречи с фокусом на продажи:
+- KPI отдела продаж: конверсия, средний чек, LTV, цикл сделки
+- Качество лидов и квалификация (A/B/C/D)
+- Скрипты продаж — что работает, что нет
+- CRM: как используется, что упускается
+- Воронка продаж: где теряются клиенты
+- Конкретные рекомендации по улучшению конверсии""",
+
+    "hr_manager": """## СКИЛЛ: HR-менеджер
+Анализируй встречи с фокусом на людей и команду:
+- Командная динамика: кто лидирует, кто блокирует
+- Распределение ролей и ответственности
+- Мотивация и вовлечённость участников
+- Конфликты и их решение
+- Рекомендации по найму, обучению, структуре
+- Оценка эффективности 1-on-1 и планёрок""",
+
+    "project_manager": """## СКИЛЛ: Проджект-менеджер
+Анализируй встречи с фокусом на управление проектами:
+- Извлекай ВСЕ задачи с дедлайнами и ответственными
+- Оценивай риски и блокеры
+- Отслеживай статусы: что сделано, что в работе, что просрочено
+- Приоритизация: что критично, что можно отложить
+- Формируй action items в формате: задача | ответственный | дедлайн | приоритет
+- Рекомендации по процессам (Agile, Kanban, спринты)""",
+
+    "content_creator": """## СКИЛЛ: Контент-мейкер
+Извлекай из встреч материал для контента:
+- Идеи для постов (Telegram, блог, соцсети)
+- Кейсы для портфолио (было → стало → результат)
+- Экспертные темы для статей
+- Цитаты и инсайты участников
+- Для каждой идеи: тема, формат, ключевая мысль, тезисы
+- Контент должен быть полезным и конкретным""",
+}
+
+
+def _build_skills_prompt(active_skills: list) -> str:
+    """Собрать промпт из активных скиллов."""
+    parts = []
+    for skill_id in active_skills:
+        if skill_id in SKILL_PROMPTS:
+            parts.append(SKILL_PROMPTS[skill_id])
+    return "\n\n".join(parts)
+
+
 # ---- Шаблоны AI-чата ----
 
 CHAT_TEMPLATES = {
@@ -352,6 +411,26 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     else:
         system = MEETING_SYSTEM
 
+    # Пользовательская прокачка: скиллы + промпт + память + знания
+    try:
+        active_skills = getattr(user, "claude_active_skills", None) or []
+        if active_skills:
+            system += "\n\n" + _build_skills_prompt(active_skills)
+
+        user_prompt = getattr(user, "claude_system_prompt", None)
+        if user_prompt:
+            system += f"\n\n## ИНСТРУКЦИИ ПОЛЬЗОВАТЕЛЯ\n{user_prompt}"
+
+        user_knowledge = getattr(user, "claude_knowledge_text", None)
+        if user_knowledge:
+            system += f"\n\n## БАЗА ЗНАНИЙ ПОЛЬЗОВАТЕЛЯ\n{user_knowledge[:5000]}"
+
+        user_memories = getattr(user, "claude_memories", None)
+        if user_memories:
+            system += "\n\n## ПАМЯТЬ\nЗапомненные факты:\n" + "\n".join(f"- {m}" for m in user_memories)
+    except Exception as e:
+        logger.warning(f"Ошибка прокачки: {e}")
+
     # Контекст (с проверкой владельца — обнуляем ID если не найден)
     context = ""
     if mid:
@@ -444,7 +523,9 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
 
     from app.services.providers.registry import make_provider_by_name, get_user_keys
     user_keys = get_user_keys(user)
+
     provider = get_provider_for_text(len(context))
+
     # Если у пользователя есть свой ключ для этого провайдера — пересоздаём с ним
     if user_keys.get(provider.name):
         provider = make_provider_by_name(provider.name, user_keys=user_keys)

@@ -19,8 +19,10 @@ if _is_sqlite:
     _engine_kwargs["poolclass"] = NullPool
 else:
     _engine_kwargs["poolclass"] = QueuePool
-    _engine_kwargs["pool_size"] = 10
-    _engine_kwargs["max_overflow"] = 20
+    _engine_kwargs["pool_size"] = 5
+    _engine_kwargs["max_overflow"] = 10
+    _engine_kwargs["pool_pre_ping"] = True       # проверять соединение перед использованием
+    _engine_kwargs["pool_recycle"] = 300          # пересоздавать соединения каждые 5 мин
 
 engine = create_engine(DATABASE_URL, **_engine_kwargs)
 
@@ -83,6 +85,19 @@ def init_db():
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code_id INTEGER",
                 ]
+
+            if "claude_system_prompt" not in user_cols:
+                migrations += [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS claude_system_prompt TEXT",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS claude_memories JSON DEFAULT '[]'",
+                ]
+            if "claude_active_skills" not in user_cols:
+                migrations += [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS claude_active_skills JSON DEFAULT '[]'",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS claude_knowledge_text TEXT",
+                ]
+            if "claude_bridge_token" not in user_cols:
+                migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS claude_bridge_token VARCHAR(500)")
 
             # chat_messages: user_id, edited_at
             if insp.has_table("chat_messages"):

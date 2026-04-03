@@ -206,6 +206,73 @@
     </div>
   </div>
 
+  <!-- Claude Panel Settings -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.25s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">Claude Panel</h3>
+    </div>
+    <p class="text-[13px] text-g-500 mb-3">Настройте AI-ассистента под себя. Скиллы и промпт используются во всех чатах.</p>
+
+    <!-- Готовые скиллы -->
+    <div class="bg-g-50 rounded-xl p-3 mb-3">
+      <p class="text-[12px] text-g-500 mb-2">Готовые скиллы (выберите нужные):</p>
+      <div class="space-y-1.5" id="skillsList">
+        {% set active_skills = (user.claude_active_skills or [])|list %}
+        <label class="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-white transition">
+          <input type="checkbox" value="marketing_strategist" onchange="toggleSkill(this)" class="rounded" {{ 'checked' if 'marketing_strategist' in active_skills else '' }}>
+          <span class="text-[12px]"><strong>Маркетолог-стратег</strong> — аудит, воронки, «Знаю-Хочу-Верю-Плачу», дорожные карты</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-white transition">
+          <input type="checkbox" value="sales_analyst" onchange="toggleSkill(this)" class="rounded" {{ 'checked' if 'sales_analyst' in active_skills else '' }}>
+          <span class="text-[12px]"><strong>Аналитик продаж</strong> — KPI, конверсии, скрипты, CRM, квалификация лидов</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-white transition">
+          <input type="checkbox" value="hr_manager" onchange="toggleSkill(this)" class="rounded" {{ 'checked' if 'hr_manager' in active_skills else '' }}>
+          <span class="text-[12px]"><strong>HR-менеджер</strong> — командная динамика, найм, мотивация, 1-on-1</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-white transition">
+          <input type="checkbox" value="project_manager" onchange="toggleSkill(this)" class="rounded" {{ 'checked' if 'project_manager' in active_skills else '' }}>
+          <span class="text-[12px]"><strong>Проджект-менеджер</strong> — задачи, дедлайны, риски, статусы, Agile</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-white transition">
+          <input type="checkbox" value="content_creator" onchange="toggleSkill(this)" class="rounded" {{ 'checked' if 'content_creator' in active_skills else '' }}>
+          <span class="text-[12px]"><strong>Контент-мейкер</strong> — посты, статьи, кейсы из встреч, контент-план</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Загрузка файла-знаний -->
+    <div class="bg-g-50 rounded-xl p-3 mb-3">
+      <p class="text-[12px] text-g-500 mb-2">Файл-знаний (методология, шаблоны, база знаний):</p>
+      <div class="flex gap-2 items-center">
+        <input type="file" id="knowledgeFile" accept=".md,.txt" class="text-[11px] flex-1">
+        <button onclick="uploadKnowledge()" class="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-g-200 text-g-600 hover:bg-g-300 transition whitespace-nowrap">
+          Загрузить
+        </button>
+      </div>
+      {% if user.claude_knowledge_text %}
+      <div class="mt-2 flex items-center justify-between bg-white rounded-lg px-3 py-1.5 border border-g-200">
+        <span class="text-[11px] text-g-500">📄 Файл загружен ({{ user.claude_knowledge_text|length }} символов)</span>
+        <button onclick="clearKnowledge()" class="text-[10px] text-err hover:underline">Удалить</button>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Свой промпт -->
+    <div class="bg-g-50 rounded-xl p-3 mb-3">
+      <p class="text-[12px] text-g-500 mb-2">Свой промпт (дополнительные инструкции):</p>
+      <textarea id="claudeSystemPrompt" rows="3" placeholder="Например: Отвечай кратко. Всегда предлагай следующий шаг."
+        class="w-full px-3 py-2 border border-g-200 rounded-lg text-[12px] bg-white resize-y">{{ user.claude_system_prompt or '' }}</textarea>
+    </div>
+
+    <div class="flex items-center justify-between">
+      <button onclick="saveClaudeSettings()" class="text-[11px] font-semibold px-4 py-1.5 rounded-lg bg-zoom text-white hover:bg-zoom-hover transition">
+        Сохранить
+      </button>
+      <span id="claudeSettingsSaved" class="text-[11px] text-ok hidden">Сохранено!</span>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -262,6 +329,55 @@ function generateAgentToken() {
         alert('Токен скопирован в буфер обмена');
       });
     }
+  });
+}
+
+function saveClaudeSettings() {
+  var prompt = document.getElementById('claudeSystemPrompt').value;
+  var skills = [];
+  document.querySelectorAll('#skillsList input[type=checkbox]:checked').forEach(function(cb) {
+    skills.push(cb.value);
+  });
+  fetch('/api/claude/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({system_prompt: prompt, active_skills: skills})
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.ok) {
+      var s = document.getElementById('claudeSettingsSaved');
+      s.classList.remove('hidden');
+      setTimeout(function() { s.classList.add('hidden'); }, 2000);
+    }
+  });
+}
+
+function toggleSkill(cb) {
+  saveClaudeSettings();
+}
+
+function uploadKnowledge() {
+  var file = document.getElementById('knowledgeFile').files[0];
+  if (!file) { alert('Выберите файл'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    fetch('/api/claude/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({knowledge_text: e.target.result})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) location.reload();
+    });
+  };
+  reader.readAsText(file);
+}
+
+function clearKnowledge() {
+  fetch('/api/claude/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({knowledge_text: ''})
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.ok) location.reload();
   });
 }
 </script>
