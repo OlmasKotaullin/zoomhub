@@ -176,6 +176,8 @@ def get_user_keys(user) -> dict:
         keys["claude"] = user.user_anthropic_api_key
     if getattr(user, "user_openai_api_key", None):
         keys["openai"] = user.user_openai_api_key
+    if getattr(user, "user_gigachat_auth_key", None):
+        keys["gigachat"] = user.user_gigachat_auth_key
     return keys
 
 

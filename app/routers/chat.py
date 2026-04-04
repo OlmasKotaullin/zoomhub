@@ -524,9 +524,25 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     from app.services.providers.registry import make_provider_by_name, get_user_keys
     user_keys = get_user_keys(user)
 
-    provider = get_provider_for_text(len(context))
+    # Для не-admin: использовать только пользовательские ключи (серверные — только для admin)
+    is_admin = getattr(user, "is_admin", False)
+    if is_admin:
+        provider = get_provider_for_text(len(context))
+    elif user_keys:
+        # Пользователь имеет свои ключи — выбрать первый доступный
+        key_to_provider = {"gigachat": "gigachat", "groq": "groq", "gemini": "gemini", "claude": "claude", "anthropic": "claude"}
+        provider = None
+        for key_name, prov_name in key_to_provider.items():
+            if user_keys.get(key_name):
+                provider = make_provider_by_name(prov_name, user_keys=user_keys)
+                break
+        if not provider:
+            provider = get_provider_for_text(len(context))
+    else:
+        # Нет ключей — используем серверный провайдер (для первых пользователей / демо)
+        provider = get_provider_for_text(len(context))
 
-    # Если у пользователя есть свой ключ для этого провайдера — пересоздаём с ним
+    # Если у пользователя есть свой ключ для выбранного провайдера — пересоздаём с ним
     if user_keys.get(provider.name):
         provider = make_provider_by_name(provider.name, user_keys=user_keys)
     logger.info(f"Chat stream: user={user.id}, meeting={mid}, folder={fid}, provider={provider.name}, template={template_key}")

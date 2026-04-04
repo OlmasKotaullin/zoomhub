@@ -43,11 +43,16 @@
           {{ 'bg-zoom text-white border-zoom' if llm_provider == 'claude' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
         🤖 Claude
       </button>
+      <button onclick="switchLLM('gigachat')" id="btn-llm-gigachat"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if llm_provider == 'gigachat' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        💬 GigaChat <span class="text-[10px] opacity-70">(бесплатно)</span>
+      </button>
     </div>
     <div class="text-[12px] text-g-400">
       {% if llm_provider == 'auto' %}
         <p>Автоматический выбор лучшего доступного провайдера.</p>
-        <p class="mt-1 text-ok/70">Groq → Gemini → Ollama → Claude</p>
+        <p class="mt-1 text-ok/70">GigaChat → Gemini → Groq → Claude</p>
       {% elif llm_provider == 'groq' %}
         <p>Модель: <strong class="text-g-600">Llama 3.3 70B</strong> — бесплатно, 128K контекст, сверхбыстрый</p>
         <p class="mt-1 text-ok/70">Встречи до 2 часов помещаются целиком</p>
@@ -57,6 +62,9 @@
       {% elif llm_provider == 'ollama' %}
         <p>Модель: <strong class="text-g-600">{{ ollama_model }}</strong> — бесплатно, офлайн, ~5 ГБ RAM</p>
         <p class="mt-1">Установка: <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">brew install ollama && ollama pull {{ ollama_model }}</code></p>
+      {% elif llm_provider == 'gigachat' %}
+        <p>Модель: <strong class="text-g-600">GigaChat (Сбер)</strong> — бесплатно, российский, ~900K токенов/мес</p>
+        <p class="mt-1 text-ok/70">Получить ключ: developers.sber.ru/studio</p>
       {% else %}
         <p>Модель: <strong class="text-g-600">Claude Sonnet</strong> — лучшее качество, весь контекст</p>
         {% if not claude_ok %}<p class="mt-1 text-err/70">Добавьте <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">ANTHROPIC_API_KEY</code> в .env</p>{% endif %}
@@ -84,6 +92,16 @@
       <div>
         <label class="text-[12px] font-semibold text-g-600 block mb-1">Anthropic API Key <span class="text-g-400 font-normal">(Claude, платный)</span></label>
         <input name="anthropic_key" type="password" value="{{ user.user_anthropic_api_key or '' }}" placeholder="sk-ant-..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+      </div>
+      <div>
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">GigaChat Auth Key <span class="text-g-400 font-normal">(Сбер, бесплатно на developers.sber.ru)</span></label>
+        <input name="gigachat_key" type="password" value="{{ user.user_gigachat_auth_key or '' }}" placeholder="MDE5..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+      </div>
+      <div>
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">DeepSeek API Key <span class="text-g-400 font-normal">(платный, platform.deepseek.com)</span></label>
+        <input name="deepseek_key" type="password" value="{{ user.user_deepseek_api_key or '' }}" placeholder="sk-..."
           class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
       </div>
       <div>
