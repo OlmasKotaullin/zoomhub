@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 AUTH_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
 API_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-MODEL = "GigaChat-Pro"
+MODEL = "GigaChat"
 SCOPE = "GIGACHAT_API_PERS"  # бесплатный для физлиц
 
 
