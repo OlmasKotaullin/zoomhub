@@ -30,6 +30,11 @@ def _make_groq(api_key: str | None = None) -> LLMProvider:
     return GroqProvider(api_key=api_key)
 
 
+def _make_gigachat(api_key: str | None = None) -> LLMProvider:
+    from app.services.providers.gigachat_provider import GigaChatProvider
+    return GigaChatProvider(auth_key=api_key)
+
+
 def get_llm_provider() -> LLMProvider:
     """Возвращает текущий LLM-провайдер (singleton, пересоздаётся при смене)."""
     global _llm_instance
@@ -47,8 +52,10 @@ def get_llm_provider() -> LLMProvider:
         _llm_instance = _make_gemini()
     elif LLM_PROVIDER == "groq":
         _llm_instance = _make_groq()
+    elif LLM_PROVIDER == "gigachat":
+        _llm_instance = _make_gigachat()
     elif LLM_PROVIDER == "auto":
-        _llm_instance = _make_groq()  # default для auto — бесплатный Groq
+        _llm_instance = _make_gigachat()  # default для auto — GigaChat (бесплатный, работает из РФ)
     else:
         raise ValueError(f"Неизвестный LLM провайдер: {LLM_PROVIDER}")
 
@@ -74,8 +81,13 @@ def get_provider_for_text(text_length: int) -> LLMProvider:
         provider = _make_gemini()
     elif LLM_PROVIDER == "groq":
         provider = _make_groq()
+    elif LLM_PROVIDER == "gigachat":
+        provider = _make_gigachat()
     elif LLM_PROVIDER == "auto":
-        if GROQ_API_KEY:
+        from app.config import GIGACHAT_AUTH_KEY
+        if GIGACHAT_AUTH_KEY:
+            provider = _make_gigachat()
+        elif GROQ_API_KEY:
             provider = _make_groq()
         elif GOOGLE_AI_API_KEY:
             provider = _make_gemini()
@@ -142,6 +154,7 @@ def make_provider_by_name(name: str, user_keys: dict | None = None) -> LLMProvid
         "gemini": _make_gemini,
         "claude": _make_claude,
         "ollama": _make_ollama,
+        "gigachat": _make_gigachat,
     }
     factory = factories.get(name)
     if not factory:
