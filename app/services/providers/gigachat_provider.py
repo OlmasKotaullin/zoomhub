@@ -135,3 +135,10 @@ class GigaChatProvider(LLMProvider):
         except Exception as e:
             logger.error(f"GigaChat stream ошибка: {e}")
             raise
+
+    async def health_check(self) -> bool:
+        try:
+            await self._get_token()
+            return True
+        except Exception:
+            return False
