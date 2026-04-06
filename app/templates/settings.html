@@ -147,8 +147,77 @@
         <p>Модель: <strong class="text-g-600">{{ whisper_model }}</strong> — бесплатно, офлайн, ~10 мин на 1ч аудио</p>
         <p class="mt-1">Уже установлен. Качество русского: хорошее.</p>
       {% else %}
-        <p>Бот: <strong class="text-g-600">@{{ bukvitsa_username }}</strong> — безлимит 600₽/мес</p>
-        {% if not telegram_ok %}<p class="mt-1 text-warn">Запустите: <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">python setup_telegram.py</code></p>{% endif %}
+        <p class="mb-3">Буквица работает через ваш личный Telegram-аккаунт.</p>
+
+        {% if user.tg_session %}
+        <!-- Telegram подключён -->
+        <div class="flex items-center justify-between bg-ok/10 border border-ok/20 rounded-xl px-3 py-2.5 mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-ok text-[16px]">✓</span>
+            <div>
+              <p class="text-[12px] font-semibold text-ok">Telegram подключён</p>
+              <p class="text-[11px] text-g-400">Бот: @{{ user.tg_bot_username or 'bykvitsa' }}</p>
+            </div>
+          </div>
+          <button onclick="tgDisconnect()" class="text-[11px] text-err hover:underline">Отключить</button>
+        </div>
+        {% else %}
+        <!-- Форма подключения -->
+        <div class="bg-g-50 rounded-xl p-3 space-y-2" id="tgConnectForm">
+          <p class="text-[11px] text-g-400 mb-2">
+            Нужны credentials от <a href="https://my.telegram.org" target="_blank" class="text-zoom underline">my.telegram.org</a> → API development tools
+          </p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[11px] font-semibold text-g-600 block mb-1">API ID</label>
+              <input id="tgApiId" type="text" placeholder="12345678"
+                class="z-input w-full bg-white px-2.5 py-1.5 text-[12px] font-mono">
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-g-600 block mb-1">API Hash</label>
+              <input id="tgApiHash" type="password" placeholder="abc123..."
+                class="z-input w-full bg-white px-2.5 py-1.5 text-[12px] font-mono">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[11px] font-semibold text-g-600 block mb-1">Номер телефона</label>
+              <input id="tgPhone" type="text" placeholder="+79001234567"
+                class="z-input w-full bg-white px-2.5 py-1.5 text-[12px]">
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-g-600 block mb-1">Бот Буквицы</label>
+              <input id="tgBot" type="text" placeholder="bykvitsa" value="bykvitsa"
+                class="z-input w-full bg-white px-2.5 py-1.5 text-[12px]">
+            </div>
+          </div>
+          <button onclick="tgSendCode()" class="z-btn z-btn-primary text-[12px] px-4 py-1.5 w-full">
+            Отправить код в Telegram
+          </button>
+        </div>
+
+        <!-- Ввод кода (скрыт изначально) -->
+        <div class="bg-g-50 rounded-xl p-3 space-y-2 hidden" id="tgCodeForm">
+          <p class="text-[12px] font-semibold text-g-700">Введите код из Telegram</p>
+          <input id="tgCode" type="text" placeholder="12345" maxlength="6"
+            class="z-input w-full bg-white px-2.5 py-1.5 text-[14px] font-mono text-center tracking-widest">
+          <div id="tgPasswordRow" class="hidden">
+            <label class="text-[11px] font-semibold text-g-600 block mb-1">Пароль 2FA</label>
+            <input id="tgPassword" type="password" placeholder="Пароль двухфакторной аутентификации"
+              class="z-input w-full bg-white px-2.5 py-1.5 text-[12px]">
+          </div>
+          <div class="flex gap-2">
+            <button onclick="tgConfirmCode()" class="z-btn z-btn-primary text-[12px] px-4 py-1.5 flex-1">
+              Подтвердить
+            </button>
+            <button onclick="tgResetForm()" class="text-[12px] text-g-400 hover:text-g-600 px-3">
+              Назад
+            </button>
+          </div>
+        </div>
+        {% endif %}
+
+        <p id="tgStatus" class="text-[12px] mt-2 hidden"></p>
       {% endif %}
     </div>
   </div>
@@ -397,6 +466,75 @@ function clearKnowledge() {
   }).then(function(r) { return r.json(); }).then(function(data) {
     if (data.ok) location.reload();
   });
+}
+
+function tgSendCode() {
+  const apiId = document.getElementById('tgApiId').value.trim();
+  const apiHash = document.getElementById('tgApiHash').value.trim();
+  const phone = document.getElementById('tgPhone').value.trim();
+  const bot = document.getElementById('tgBot').value.trim();
+  if (!apiId || !apiHash || !phone) {
+    tgShowStatus('Заполните все поля', 'error');
+    return;
+  }
+  tgShowStatus('Отправляю код...', 'info');
+  const fd = new FormData();
+  fd.append('api_id', apiId);
+  fd.append('api_hash', apiHash);
+  fd.append('phone', phone);
+  fd.append('bot_username', bot);
+  fetch('/settings/telegram/send-code', { method: 'POST', body: fd })
+    .then(r => r.json()).then(data => {
+      if (data.status === 'ok') {
+        document.getElementById('tgConnectForm').classList.add('hidden');
+        document.getElementById('tgCodeForm').classList.remove('hidden');
+        tgShowStatus('Код отправлен в Telegram', 'ok');
+      } else {
+        tgShowStatus(data.detail || 'Ошибка', 'error');
+      }
+    });
+}
+
+function tgConfirmCode() {
+  const code = document.getElementById('tgCode').value.trim();
+  const password = document.getElementById('tgPassword')?.value.trim() || '';
+  if (!code) { tgShowStatus('Введите код', 'error'); return; }
+  tgShowStatus('Проверяю...', 'info');
+  const fd = new FormData();
+  fd.append('code', code);
+  fd.append('password', password);
+  fetch('/settings/telegram/confirm-code', { method: 'POST', body: fd })
+    .then(r => r.json()).then(data => {
+      if (data.status === 'ok') {
+        tgShowStatus(data.detail, 'ok');
+        setTimeout(() => location.reload(), 1200);
+      } else if (data.status === 'need_password') {
+        document.getElementById('tgPasswordRow').classList.remove('hidden');
+        tgShowStatus('Введите пароль 2FA', 'info');
+      } else {
+        tgShowStatus(data.detail || 'Ошибка', 'error');
+      }
+    });
+}
+
+function tgDisconnect() {
+  if (!confirm('Отключить Telegram? Ручная загрузка файлов перестанет работать.')) return;
+  fetch('/settings/telegram/disconnect', { method: 'POST' })
+    .then(r => r.json()).then(() => location.reload());
+}
+
+function tgResetForm() {
+  document.getElementById('tgConnectForm').classList.remove('hidden');
+  document.getElementById('tgCodeForm').classList.add('hidden');
+  tgShowStatus('', '');
+}
+
+function tgShowStatus(msg, type) {
+  const el = document.getElementById('tgStatus');
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden', 'text-ok', 'text-err', 'text-g-400');
+  el.classList.add(type === 'ok' ? 'text-ok' : type === 'error' ? 'text-err' : 'text-g-400');
+  el.textContent = msg;
 }
 </script>
 {% endblock %}

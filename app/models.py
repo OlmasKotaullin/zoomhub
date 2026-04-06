@@ -85,6 +85,11 @@ class User(Base):
     claude_active_skills = Column(JSON, default=list)
     claude_knowledge_text = Column(Text, nullable=True)
     claude_bridge_token = Column(String(500), nullable=True)
+    # Per-user Telegram (Буквица транскрипция)
+    tg_api_id = Column(Integer, nullable=True)
+    tg_api_hash = Column(String(255), nullable=True)
+    tg_bot_username = Column(String(100), nullable=True)
+    tg_session = Column(Text, nullable=True)  # Telethon StringSession
     # Onboarding
     onboarding_completed = Column(Boolean, default=False)
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)

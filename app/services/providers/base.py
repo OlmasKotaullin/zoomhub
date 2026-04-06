@@ -47,11 +47,12 @@ class TranscriptionProvider(ABC):
     name: str = "unknown"
 
     @abstractmethod
-    async def transcribe(self, file_path: str) -> dict:
+    async def transcribe(self, file_path: str, user_id: int | None = None) -> dict:
         """Транскрибирует аудиофайл.
 
         Args:
             file_path: Путь к аудиофайлу
+            user_id: ID пользователя для per-user сессии (Буквица)
 
         Returns:
             {"full_text": str, "segments": list[dict]}

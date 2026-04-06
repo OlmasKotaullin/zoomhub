@@ -16,7 +16,7 @@ class OpenAIWhisperProvider(TranscriptionProvider):
         from app.config import OPENAI_API_KEY
         self._api_key = OPENAI_API_KEY
 
-    async def transcribe(self, file_path: str) -> dict:
+    async def transcribe(self, file_path: str, user_id: int | None = None) -> dict:
         from openai import AsyncOpenAI
 
         client = AsyncOpenAI(api_key=self._api_key)

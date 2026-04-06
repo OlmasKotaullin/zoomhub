@@ -98,6 +98,15 @@ def _get_audio_path(meeting_id: int) -> str | None:
         db.close()
 
 
+def _get_user_id(meeting_id: int) -> int | None:
+    db = SessionLocal()
+    try:
+        m = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        return m.user_id if m else None
+    finally:
+        db.close()
+
+
 async def process_meeting(meeting_id: int, download_url: str | None = None):
     """Фоновая обработка записи: скачивание → транскрибация → конспект."""
     try:
@@ -129,7 +138,8 @@ async def process_meeting(meeting_id: int, download_url: str | None = None):
             _update_status(meeting_id, MeetingStatus.transcribing)
             logger.info(f"[{meeting_id}] Начинаю транскрибацию: {audio_path}")
 
-            result = await transcribe_file(audio_path)
+            user_id = _get_user_id(meeting_id)
+            result = await transcribe_file(audio_path, user_id=user_id)
 
             logger.info(f"[{meeting_id}] Транскрипт получен: {len(result['full_text'])} символов")
 

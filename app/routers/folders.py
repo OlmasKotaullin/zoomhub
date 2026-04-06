@@ -93,6 +93,105 @@ async def switch_transcription_provider(request: Request, provider: str = Form(.
     return {"status": "ok", "provider": provider}
 
 
+@router.post("/settings/telegram/send-code")
+async def tg_send_code(
+    request: Request,
+    api_id: int = Form(...),
+    api_hash: str = Form(...),
+    phone: str = Form(...),
+    bot_username: str = Form("bykvitsa"),
+    db: Session = Depends(get_db),
+):
+    """Шаг 1: отправить код подтверждения на телефон пользователя."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return {"status": "error", "detail": "Не авторизован"}
+
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+    from app.services.providers.bukvitsa_provider import _pending_auth
+
+    client = TelegramClient(StringSession(), api_id, api_hash)
+    await client.connect()
+    try:
+        await client.send_code_request(phone)
+    except Exception as e:
+        await client.disconnect()
+        return {"status": "error", "detail": str(e)}
+
+    _pending_auth[user.id] = (client, phone, api_id, api_hash, bot_username)
+    return {"status": "ok", "detail": "Код отправлен в Telegram"}
+
+
+@router.post("/settings/telegram/confirm-code")
+async def tg_confirm_code(
+    request: Request,
+    code: str = Form(...),
+    password: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Шаг 2: подтвердить код (и 2FA-пароль если есть)."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return {"status": "error", "detail": "Не авторизован"}
+
+    from app.services.providers.bukvitsa_provider import _pending_auth
+
+    pending = _pending_auth.get(user.id)
+    if not pending:
+        return {"status": "error", "detail": "Сначала отправьте код. Начните заново."}
+
+    client, phone, api_id, api_hash, bot_username = pending
+
+    try:
+        await client.sign_in(phone, code)
+    except Exception as e:
+        err = str(e)
+        if "Two-steps verification" in err or "password" in err.lower():
+            if not password:
+                return {"status": "need_password", "detail": "Введите пароль двухфакторной аутентификации"}
+            try:
+                await client.sign_in(password=password)
+            except Exception as e2:
+                await client.disconnect()
+                _pending_auth.pop(user.id, None)
+                return {"status": "error", "detail": str(e2)}
+        else:
+            await client.disconnect()
+            _pending_auth.pop(user.id, None)
+            return {"status": "error", "detail": err}
+
+    session_string = client.session.save()
+    await client.disconnect()
+    _pending_auth.pop(user.id, None)
+
+    user.tg_api_id = api_id
+    user.tg_api_hash = api_hash
+    user.tg_bot_username = bot_username.strip("@") or "bykvitsa"
+    user.tg_session = session_string
+    db.commit()
+
+    return {"status": "ok", "detail": "Telegram подключён. Теперь загрузка файлов использует вашу Буквицу."}
+
+
+@router.post("/settings/telegram/disconnect")
+async def tg_disconnect(request: Request, db: Session = Depends(get_db)):
+    """Отключить личный Telegram (удалить сессию)."""
+    user = get_current_user_optional(request, db)
+    if not user:
+        return {"status": "error", "detail": "Не авторизован"}
+
+    from app.services.providers.bukvitsa_provider import _user_clients
+    _user_clients.pop(user.id, None)
+
+    user.tg_api_id = None
+    user.tg_api_hash = None
+    user.tg_bot_username = None
+    user.tg_session = None
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.post("/settings/api-keys")
 async def save_api_keys(
     request: Request,

@@ -36,7 +36,7 @@ async def _get_whisper_model():
 class WhisperProvider(TranscriptionProvider):
     name = "whisper"
 
-    async def transcribe(self, file_path: str) -> dict:
+    async def transcribe(self, file_path: str, user_id: int | None = None) -> dict:
         model = await _get_whisper_model()
 
         logger.info(f"Whisper: транскрибирую {file_path}...")

@@ -40,10 +40,40 @@ PROGRESS_MARKERS = [
     "в течение пары минут",
 ]
 
-# Singleton Telethon-клиент
+# Singleton Telethon-клиент (серверная сессия — только для fallback/admin)
 _client: TelegramClient | None = None
 _client_lock = asyncio.Lock()
 _transcribe_lock = asyncio.Lock()
+
+# Per-user клиенты: user_id → TelegramClient
+_user_clients: dict[int, TelegramClient] = {}
+_user_client_locks: dict[int, asyncio.Lock] = {}
+
+# Ожидающие подтверждения кода: user_id → (client, phone)
+_pending_auth: dict[int, tuple] = {}
+
+
+async def _get_user_client(user_id: int, session_string: str, api_id: int, api_hash: str) -> TelegramClient:
+    """Возвращает Telethon-клиент для конкретного пользователя (кэшируется)."""
+    from telethon.sessions import StringSession
+
+    if user_id not in _user_client_locks:
+        _user_client_locks[user_id] = asyncio.Lock()
+
+    async with _user_client_locks[user_id]:
+        client = _user_clients.get(user_id)
+        if client and client.is_connected():
+            return client
+
+        client = TelegramClient(StringSession(session_string), api_id, api_hash)
+        await client.connect()
+
+        if not await client.is_user_authorized():
+            raise RuntimeError("Telegram-сессия пользователя не авторизована. Переподключите в Настройках.")
+
+        _user_clients[user_id] = client
+        logger.info(f"Telethon клиент подключён для user_id={user_id}")
+        return client
 
 
 async def _get_client() -> TelegramClient:
@@ -87,25 +117,43 @@ async def _get_client() -> TelegramClient:
 class BukvitsaProvider(TranscriptionProvider):
     name = "bukvitsa"
 
-    async def transcribe(self, file_path: str) -> dict:
+    async def transcribe(self, file_path: str, user_id: int | None = None) -> dict:
         async with _transcribe_lock:
-            return await self._transcribe_impl(file_path)
+            return await self._transcribe_impl(file_path, user_id=user_id)
 
-    async def _transcribe_impl(self, file_path: str) -> dict:
+    async def _transcribe_impl(self, file_path: str, user_id: int | None = None) -> dict:
+        # Пробуем per-user сессию, иначе серверная
+        if user_id:
+            from app.database import SessionLocal
+            from app.models import User
+            db = SessionLocal()
+            try:
+                u = db.query(User).filter(User.id == user_id).first()
+                if u and u.tg_session and u.tg_api_id and u.tg_api_hash:
+                    client = await _get_user_client(
+                        user_id, u.tg_session, u.tg_api_id, u.tg_api_hash
+                    )
+                    bot_username = u.tg_bot_username or BUKVITSA_BOT_USERNAME
+                    bot_entity = await client.get_entity(bot_username)
+                    return await self._do_transcribe(client, bot_entity, file_path)
+            finally:
+                db.close()
+
+        # Fallback: серверная сессия
         client = await _get_client()
         bot_entity = await client.get_entity(BUKVITSA_BOT_USERNAME)
+        return await self._do_transcribe(client, bot_entity, file_path)
 
-        # Сжимаем аудио если > 5 МБ
+    async def _do_transcribe(self, client: "TelegramClient", bot_entity, file_path: str) -> dict:
+        """Основная логика отправки файла в Буквицу и получения транскрипта."""
         send_path = await _compress_audio(file_path)
-        compressed = send_path != file_path  # Нужно ли удалить после отправки
+        compressed = send_path != file_path
 
-        # Запоминаем ID последнего сообщения ДО отправки
         last_msg_before = await client.get_messages(bot_entity, limit=1)
         last_id_before = last_msg_before[0].id if last_msg_before else 0
 
-        # Отправляем файл
         file_size_mb = Path(send_path).stat().st_size / 1024 / 1024
-        logger.info(f"Отправляю файл {Path(send_path).name} ({file_size_mb:.1f} МБ) боту @{BUKVITSA_BOT_USERNAME}")
+        logger.info(f"Отправляю файл {Path(send_path).name} ({file_size_mb:.1f} МБ)")
 
         upload_progress = {"last_pct": 0}
 
@@ -116,8 +164,6 @@ class BukvitsaProvider(TranscriptionProvider):
                 logger.info(f"Загрузка: {pct}% ({sent // 1024 // 1024}/{total // 1024 // 1024} МБ)")
 
         upload_timeout = max(300, int(file_size_mb * 30 + 180))
-        logger.info(f"Timeout загрузки: {upload_timeout}с (~{upload_timeout // 60} мин)")
-
         try:
             await asyncio.wait_for(
                 client.send_file(bot_entity, send_path, progress_callback=on_progress),
@@ -128,12 +174,10 @@ class BukvitsaProvider(TranscriptionProvider):
 
         logger.info("Файл отправлен, жду ответ Буквицы (polling)...")
 
-        # ШАГ 1: Ждём появления ответа
         doc_msg_id = None
         done_text = None
-        max_attempts = RESPONSE_TIMEOUT // POLL_INTERVAL
 
-        for attempt in range(max_attempts):
+        for attempt in range(RESPONSE_TIMEOUT // POLL_INTERVAL):
             await asyncio.sleep(POLL_INTERVAL)
 
             messages = await client.get_messages(bot_entity, limit=10)
@@ -143,11 +187,10 @@ class BukvitsaProvider(TranscriptionProvider):
                 if msg.document and not doc_msg_id:
                     doc_msg_id = msg.id
                     logger.info(f"Polling: найден документ [{msg.id}]")
-
                 text = msg.text or ""
                 if text and any(marker in text.lower() for marker in DONE_MARKERS):
                     done_text = text
-                    logger.info(f"Polling: найден ответ [{msg.id}] ({len(text)} символов)")
+                    logger.info(f"Polling: найден ответ [{msg.id}]")
 
             if doc_msg_id and done_text:
                 break
@@ -161,7 +204,6 @@ class BukvitsaProvider(TranscriptionProvider):
                     for m2 in msgs2:
                         if m2.id > last_id_before and not m2.out and m2.document:
                             doc_msg_id = m2.id
-                            logger.info(f"Документ найден [{m2.id}]")
                             break
                     if doc_msg_id:
                         break
@@ -170,9 +212,7 @@ class BukvitsaProvider(TranscriptionProvider):
             if attempt % 12 == 0 and attempt > 0:
                 logger.info(f"Ожидание... {attempt * POLL_INTERVAL}с")
 
-        # ШАГ 2: Скачиваем документ
         if doc_msg_id:
-            logger.info(f"Скачиваю документ [{doc_msg_id}]...")
             try:
                 doc_msgs = await client.get_messages(bot_entity, ids=[doc_msg_id])
                 if doc_msgs and doc_msgs[0] and doc_msgs[0].document:
@@ -182,17 +222,12 @@ class BukvitsaProvider(TranscriptionProvider):
                         file_text = Path(downloaded).read_text(encoding='utf-8', errors='replace')
                         Path(downloaded).unlink(missing_ok=True)
                         if len(file_text) > 50:
-                            logger.info(f"Транскрипт из документа: {len(file_text)} символов")
                             self._cleanup_compressed(send_path, compressed)
                             return parse_response(file_text)
-                        else:
-                            logger.warning(f"Документ слишком короткий: {len(file_text)} символов")
             except Exception as e:
                 logger.error(f"Ошибка скачивания документа: {e}")
 
-        # ШАГ 3: Fallback — текстовое сообщение
         if done_text:
-            logger.info(f"Использую текстовое сообщение ({len(done_text)} символов)")
             parsed = parse_response(done_text)
             self._cleanup_compressed(send_path, compressed)
             return parsed
