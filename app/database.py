@@ -79,6 +79,8 @@ def init_db():
                 ]
             if "zoom_recording_id" not in meeting_cols:
                 migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS zoom_recording_id VARCHAR(255) UNIQUE")
+            if "zoom_meeting_id" not in meeting_cols:
+                migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS zoom_meeting_id VARCHAR(255)")
 
             if "onboarding_completed" not in user_cols:
                 migrations += [
