@@ -59,12 +59,22 @@ async def _poll_user(user, db):
         if not recording_id:
             continue
 
-        # Check if already processed
+        # Check if already processed (by recording UUID or meeting numeric ID)
         existing = db.query(Meeting).filter(
             Meeting.zoom_recording_id == recording_id
         ).first()
         if existing:
             continue
+
+        # Also check by zoom_meeting_id — агент мог уже загрузить транскрипт
+        if zoom_id:
+            existing_by_mid = db.query(Meeting).filter(
+                Meeting.zoom_meeting_id == zoom_id,
+                Meeting.status != MeetingStatus.error,
+            ).first()
+            if existing_by_mid:
+                logger.info(f"Zoom meeting {zoom_id} уже обработан агентом (id={existing_by_mid.id}), пропускаю")
+                continue
 
         # Find best file (audio preferred)
         files = recording.get("recording_files", [])

@@ -140,7 +140,8 @@ def save_config(cfg: dict):
 
 
 def upload_transcript(server: str, token: str, title: str,
-                      transcript: dict, duration: int = 0) -> bool:
+                      transcript: dict, duration: int = 0,
+                      zoom_meeting_id: str = "") -> bool:
     """Загружает готовый транскрипт на сервер (без аудио)."""
     url = f"{server.rstrip('/')}/api/agent/upload-transcript"
     headers = {
@@ -152,6 +153,7 @@ def upload_transcript(server: str, token: str, title: str,
         "transcript_text": transcript["full_text"],
         "segments": transcript.get("segments", []),
         "duration_seconds": duration,
+        "zoom_meeting_id": zoom_meeting_id,
     }
 
     try:
@@ -223,7 +225,8 @@ async def process_file(filepath: Path, cfg: dict) -> bool:
 
         # Загрузка транскрипта на сервер
         duration = int(word_count / 150 * 60)  # ~150 слов/мин
-        return upload_transcript(server, token, filepath.stem, result, duration)
+        zoom_id = _extract_zoom_id(filepath.name) or ""
+        return upload_transcript(server, token, filepath.stem, result, duration, zoom_id)
 
     except Exception as e:
         print(f"  ⚠️  Ошибка Буквицы: {e}", flush=True)

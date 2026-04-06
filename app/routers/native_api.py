@@ -494,9 +494,20 @@ async def agent_upload_transcript(
     transcript_text = body.get("transcript_text", "")
     segments = body.get("segments", [])
     duration_seconds = body.get("duration_seconds", 0)
+    zoom_meeting_id = body.get("zoom_meeting_id", "")
 
     if not transcript_text or len(transcript_text.strip()) < 10:
         raise HTTPException(422, "Транскрипт слишком короткий")
+
+    # Дедупликация по zoom_meeting_id
+    if zoom_meeting_id:
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.zoom_meeting_id == zoom_meeting_id,
+            Meeting.status != MeetingStatus.error,
+        ).first()
+        if existing:
+            return {"id": existing.id, "title": existing.title, "status": existing.status.value}
 
     meeting = Meeting(
         user_id=user.id,
@@ -504,6 +515,7 @@ async def agent_upload_transcript(
         source=MeetingSource.upload,
         status=MeetingStatus.summarizing,
         duration_seconds=duration_seconds,
+        zoom_meeting_id=zoom_meeting_id or None,
     )
     db.add(meeting)
     db.commit()
