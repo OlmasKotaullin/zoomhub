@@ -399,25 +399,37 @@ function getTelegramLink() {
 function checkKeyStatus(providerId) {
   const icon = document.getElementById('status-icon-' + providerId);
   const text = document.getElementById('status-text-' + providerId);
-  // Спиннер
   icon.className = 'inline-block w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin';
   text.textContent = '...';
-  fetch('/settings/health/' + (providerId === 'openai' ? 'transcription' : 'llm') + '?provider=' + providerId)
+  text.className = 'text-[11px] text-g-500';
+  const type = providerId === 'openai' ? 'transcription' : 'llm';
+  fetch('/settings/health/' + type + '?provider=' + providerId)
     .then(r => r.json())
     .then(data => {
-      if (data.ok) {
+      const status = data.status || (data.ok ? 'active' : 'error');
+      const msg = data.message || (data.ok ? 'Работает' : 'Не работает');
+      if (status === 'active') {
         icon.className = 'inline-block w-3 h-3 rounded-full bg-green-500';
-        text.textContent = 'Работает';
-        text.className = text.className.replace('text-g-500', 'text-green-600');
+        text.className = 'text-[11px] text-green-600';
+      } else if (status === 'quota') {
+        icon.className = 'inline-block w-3 h-3 rounded-full bg-amber-400';
+        text.className = 'text-[11px] text-amber-600';
+      } else if (status === 'geo_blocked') {
+        icon.className = 'inline-block w-3 h-3 rounded-full bg-red-500';
+        text.className = 'text-[11px] text-red-500';
+      } else if (status === 'no_balance') {
+        icon.className = 'inline-block w-3 h-3 rounded-full bg-red-500';
+        text.className = 'text-[11px] text-red-500';
       } else {
         icon.className = 'inline-block w-3 h-3 rounded-full bg-red-500';
-        text.textContent = data.error ? 'Ошибка' : 'Не работает';
-        text.className = text.className.replace('text-g-500', 'text-red-500');
+        text.className = 'text-[11px] text-red-500';
       }
+      text.textContent = msg;
     })
     .catch(() => {
       icon.className = 'inline-block w-3 h-3 rounded-full bg-red-500';
-      text.textContent = 'Ошибка';
+      text.textContent = 'Ошибка сети';
+      text.className = 'text-[11px] text-red-500';
     });
 }
 

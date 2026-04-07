@@ -248,7 +248,10 @@ async def save_api_keys(
 
 @router.get("/settings/health/{provider_type}")
 async def check_provider_health(request: Request, provider_type: str, provider: str = "", db: Session = Depends(get_db)):
-    """Проверяет здоровье провайдера. ?provider=groq|gemini|claude|gigachat|openai"""
+    """Проверяет здоровье провайдера. ?provider=groq|gemini|claude|gigachat|openai
+
+    Возвращает: ok=true/false, status=active|quota|geo_blocked|no_balance|error, message=...
+    """
     user = get_current_user_optional(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -266,10 +269,29 @@ async def check_provider_health(request: Request, provider_type: str, provider: 
         else:
             raise HTTPException(status_code=400, detail="Тип: llm или transcription")
 
-        ok = await p.health_check()
-        return {"ok": ok, "provider": p.name}
+        # Детальная проверка — пытаемся сгенерировать минимальный запрос
+        try:
+            result = await p.generate(
+                messages=[{"role": "user", "content": "Ответь одним словом: привет"}],
+                system="", max_tokens=10,
+            )
+            if result:
+                return {"ok": True, "provider": p.name, "status": "active", "message": "Работает"}
+            return {"ok": False, "provider": p.name, "status": "error", "message": "Пустой ответ"}
+        except Exception as e:
+            err = str(e).lower()
+            if "429" in str(e) or "quota" in err or "rate" in err or "limit" in err:
+                return {"ok": True, "provider": p.name, "status": "quota", "message": "Лимит исчерпан (обновится завтра)"}
+            elif "403" in str(e) or "forbidden" in err or "geo" in err:
+                return {"ok": False, "provider": p.name, "status": "geo_blocked", "message": "Заблокирован в РФ"}
+            elif "401" in str(e) or "unauthorized" in err or "invalid" in err:
+                return {"ok": False, "provider": p.name, "status": "invalid_key", "message": "Ключ невалидный"}
+            elif "balance" in err or "credit" in err or "billing" in err:
+                return {"ok": False, "provider": p.name, "status": "no_balance", "message": "Нет баланса"}
+            else:
+                return {"ok": False, "provider": p.name, "status": "error", "message": str(e)[:100]}
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": str(e)[:100]}
 
 
 @router.get("/onboarding", response_class=HTMLResponse)
