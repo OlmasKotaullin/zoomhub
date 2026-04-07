@@ -77,38 +77,24 @@
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-bold text-[15px]">API-ключи</h3>
     </div>
-    <p class="text-[13px] text-g-500 mb-4">Укажите свои ключи для приоритетного доступа. Если не заполнены — используются общие.</p>
+    <p class="text-[13px] text-g-500 mb-4">Ваши личные ключи. Серверные ключи уже настроены администратором.</p>
     <form id="apiKeysForm" class="space-y-3">
+      {% macro key_field(name, label, hint, placeholder, user_value, server_ok) %}
       <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">Groq API Key <span class="text-g-400 font-normal">(бесплатно на groq.com)</span></label>
-        <input name="groq_key" type="password" value="{{ user.user_groq_api_key or '' }}" placeholder="gsk_..."
+        <label class="text-[12px] font-semibold text-g-600 block mb-1">{{ label }} <span class="text-g-400 font-normal">({{ hint }})</span>
+          {% if user_value %}<span class="text-ok text-[10px] ml-1">Ваш ключ</span>
+          {% elif server_ok %}<span class="text-zoom text-[10px] ml-1">Серверный ключ</span>
+          {% else %}<span class="text-g-400 text-[10px] ml-1">Не настроен</span>{% endif %}
+        </label>
+        <input name="{{ name }}" type="password" value="{{ user_value or '' }}" placeholder="{{ placeholder }}"
           class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
       </div>
-      <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">Google AI API Key <span class="text-g-400 font-normal">(Gemini, бесплатно на aistudio.google.com)</span></label>
-        <input name="gemini_key" type="password" value="{{ user.user_gemini_api_key or '' }}" placeholder="AIza..."
-          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
-      </div>
-      <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">Anthropic API Key <span class="text-g-400 font-normal">(Claude, платный)</span></label>
-        <input name="anthropic_key" type="password" value="{{ user.user_anthropic_api_key or '' }}" placeholder="sk-ant-..."
-          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
-      </div>
-      <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">GigaChat Auth Key <span class="text-g-400 font-normal">(Сбер, бесплатно на developers.sber.ru)</span></label>
-        <input name="gigachat_key" type="password" value="{{ user.user_gigachat_auth_key or '' }}" placeholder="MDE5..."
-          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
-      </div>
-      <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">DeepSeek API Key <span class="text-g-400 font-normal">(платный, platform.deepseek.com)</span></label>
-        <input name="deepseek_key" type="password" value="{{ user.user_deepseek_api_key or '' }}" placeholder="sk-..."
-          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
-      </div>
-      <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">OpenAI API Key <span class="text-g-400 font-normal">(Whisper транскрипция, платный)</span></label>
-        <input name="openai_key" type="password" value="{{ user.user_openai_api_key or '' }}" placeholder="sk-..."
-          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
-      </div>
+      {% endmacro %}
+      {{ key_field("groq_key", "Groq API Key", "бесплатно на groq.com", "gsk_...", user.user_groq_api_key, server_keys.groq) }}
+      {{ key_field("gemini_key", "Google AI API Key", "Gemini, бесплатно на aistudio.google.com", "AIza...", user.user_gemini_api_key, server_keys.gemini) }}
+      {{ key_field("anthropic_key", "Anthropic API Key", "Claude, платный", "sk-ant-...", user.user_anthropic_api_key, server_keys.anthropic) }}
+      {{ key_field("gigachat_key", "GigaChat Auth Key", "Сбер, бесплатно на developers.sber.ru", "MDE5...", user.user_gigachat_auth_key, server_keys.gigachat) }}
+      {{ key_field("openai_key", "OpenAI API Key", "Whisper транскрипция, платный", "sk-...", user.user_openai_api_key, server_keys.openai) }}
       <button type="submit" class="z-btn z-btn-primary px-5 py-2 text-[12px]">Сохранить ключи</button>
       <span id="keySaveStatus" class="text-[12px] text-ok ml-2 hidden">Сохранено!</span>
     </form>
@@ -119,7 +105,8 @@
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-bold text-[15px]">Транскрипция</h3>
       {% if transcription_ok %}<span class="text-[11px] font-semibold text-ok bg-ok/10 px-2.5 py-1 rounded-full">Работает</span>
-      {% else %}<span class="text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">Не доступен</span>{% endif %}
+      {% elif bukvitsa_user_ok %}<span class="text-[11px] font-semibold text-zoom bg-zoom/10 px-2.5 py-1 rounded-full">Через ваш Telegram</span>
+      {% else %}<span class="text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">Не подключено</span>{% endif %}
     </div>
     <p class="text-[13px] text-g-500 mb-3">Преобразование аудио в текст.</p>
     <div class="flex gap-2 mb-3">

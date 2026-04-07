@@ -41,6 +41,19 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
     except Exception:
         trans_ok = False
 
+    # Какие серверные ключи есть (для отображения в UI)
+    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, GIGACHAT_AUTH_KEY, OPENAI_API_KEY
+    server_keys = {
+        "groq": bool(GROQ_API_KEY),
+        "gemini": bool(GOOGLE_AI_API_KEY),
+        "anthropic": bool(ANTHROPIC_API_KEY),
+        "gigachat": bool(GIGACHAT_AUTH_KEY),
+        "openai": bool(OPENAI_API_KEY),
+    }
+
+    # Буквица: серверная или пользовательская сессия
+    bukvitsa_user_ok = bool(getattr(user, 'tg_session', None))
+
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user": user,
@@ -49,13 +62,15 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "zoom_configured": bool(ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET),
         "telegram_ok": bool(TELEGRAM_API_ID and TELEGRAM_API_HASH and session_exists),
         "bukvitsa_username": BUKVITSA_BOT_USERNAME,
+        "bukvitsa_user_ok": bukvitsa_user_ok,
         "claude_ok": bool(ANTHROPIC_API_KEY),
         "llm_provider": config_module.LLM_PROVIDER,
         "llm_ok": llm_ok,
         "ollama_model": config_module.OLLAMA_MODEL,
         "transcription_provider": config_module.TRANSCRIPTION_PROVIDER,
-        "transcription_ok": trans_ok,
+        "transcription_ok": trans_ok or bukvitsa_user_ok,
         "whisper_model": config_module.WHISPER_MODEL,
+        "server_keys": server_keys,
     })
 
 
@@ -198,6 +213,7 @@ async def save_api_keys(
     groq_key: str = Form(""),
     gemini_key: str = Form(""),
     anthropic_key: str = Form(""),
+    gigachat_key: str = Form(""),
     openai_key: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -209,6 +225,7 @@ async def save_api_keys(
     user.user_groq_api_key = groq_key.strip() or None
     user.user_gemini_api_key = gemini_key.strip() or None
     user.user_anthropic_api_key = anthropic_key.strip() or None
+    user.user_gigachat_auth_key = gigachat_key.strip() or None
     user.user_openai_api_key = openai_key.strip() or None
     db.commit()
 
