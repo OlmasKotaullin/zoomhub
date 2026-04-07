@@ -41,14 +41,27 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
     except Exception:
         trans_ok = False
 
-    # Какие серверные ключи есть (для отображения в UI)
+    # Маскированные серверные ключи (показать что ключ есть, но не раскрывать)
     from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, GIGACHAT_AUTH_KEY, OPENAI_API_KEY
+
+    def mask_key(key):
+        if not key: return ""
+        if len(key) <= 8: return key[:2] + "***" + key[-2:]
+        return key[:4] + "***" + key[-4:]
+
     server_keys = {
         "groq": bool(GROQ_API_KEY),
         "gemini": bool(GOOGLE_AI_API_KEY),
         "anthropic": bool(ANTHROPIC_API_KEY),
         "gigachat": bool(GIGACHAT_AUTH_KEY),
         "openai": bool(OPENAI_API_KEY),
+    }
+    server_keys_masked = {
+        "groq": mask_key(GROQ_API_KEY) if GROQ_API_KEY else "",
+        "gemini": mask_key(GOOGLE_AI_API_KEY) if GOOGLE_AI_API_KEY else "",
+        "anthropic": mask_key(ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else "",
+        "gigachat": mask_key(GIGACHAT_AUTH_KEY) if GIGACHAT_AUTH_KEY else "",
+        "openai": mask_key(OPENAI_API_KEY) if OPENAI_API_KEY else "",
     }
 
     # Буквица: серверная или пользовательская сессия
@@ -71,6 +84,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "transcription_ok": trans_ok or bukvitsa_user_ok,
         "whisper_model": config_module.WHISPER_MODEL,
         "server_keys": server_keys,
+        "server_keys_masked": server_keys_masked,
     })
 
 
@@ -233,24 +247,27 @@ async def save_api_keys(
 
 
 @router.get("/settings/health/{provider_type}")
-async def check_provider_health(request: Request, provider_type: str, db: Session = Depends(get_db)):
-    """Проверяет здоровье провайдера."""
+async def check_provider_health(request: Request, provider_type: str, provider: str = "", db: Session = Depends(get_db)):
+    """Проверяет здоровье провайдера. ?provider=groq|gemini|claude|gigachat|openai"""
     user = get_current_user_optional(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
     try:
-        if provider_type == "llm":
+        if provider and provider_type == "llm":
+            from app.services.providers.registry import make_provider_by_name
+            p = make_provider_by_name(provider)
+        elif provider_type == "llm":
             from app.services.providers import get_llm_provider
-            provider = get_llm_provider()
+            p = get_llm_provider()
         elif provider_type == "transcription":
             from app.services.providers import get_transcription_provider
-            provider = get_transcription_provider()
+            p = get_transcription_provider()
         else:
             raise HTTPException(status_code=400, detail="Тип: llm или transcription")
 
-        ok = await provider.health_check()
-        return {"ok": ok, "provider": provider.name}
+        ok = await p.health_check()
+        return {"ok": ok, "provider": p.name}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 

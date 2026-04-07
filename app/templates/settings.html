@@ -77,24 +77,41 @@
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-bold text-[15px]">API-ключи</h3>
     </div>
-    <p class="text-[13px] text-g-500 mb-4">Ваши личные ключи. Серверные ключи уже настроены администратором.</p>
+    <p class="text-[13px] text-g-500 mb-4">Ключи для LLM-провайдеров и транскрипции.</p>
     <form id="apiKeysForm" class="space-y-3">
-      {% macro key_field(name, label, hint, placeholder, user_value, server_ok) %}
+      {% macro key_field(name, label, hint, provider_id, user_value, server_key_masked) %}
       <div>
-        <label class="text-[12px] font-semibold text-g-600 block mb-1">{{ label }} <span class="text-g-400 font-normal">({{ hint }})</span>
-          {% if user_value %}<span class="text-ok text-[10px] ml-1">Ваш ключ</span>
-          {% elif server_ok %}<span class="text-zoom text-[10px] ml-1">Серверный ключ</span>
-          {% else %}<span class="text-g-400 text-[10px] ml-1">Не настроен</span>{% endif %}
-        </label>
-        <input name="{{ name }}" type="password" value="{{ user_value or '' }}" placeholder="{{ placeholder }}"
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-[12px] font-semibold text-g-600">{{ label }} <span class="text-g-400 font-normal">({{ hint }})</span></label>
+          {% if user_value or server_key_masked %}
+          <button type="button" onclick="checkKeyStatus('{{ provider_id }}')" class="flex items-center gap-1 text-[11px] text-g-500 hover:text-zoom transition" title="Проверить ключ">
+            <span id="status-icon-{{ provider_id }}" class="inline-block w-3 h-3 rounded-full bg-g-300 border border-g-400"></span>
+            <span id="status-text-{{ provider_id }}">Проверить</span>
+          </button>
+          {% else %}
+          <span class="text-[11px] text-g-400">Не настроен</span>
+          {% endif %}
+        </div>
+        {% if user_value %}
+        <input name="{{ name }}" type="password" value="{{ user_value }}"
           class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+        {% elif server_key_masked %}
+        <div class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono text-g-500 flex items-center justify-between">
+          <span>{{ server_key_masked }}</span>
+          <span class="text-[10px] text-zoom font-semibold">серверный</span>
+        </div>
+        <input name="{{ name }}" type="hidden" value="">
+        {% else %}
+        <input name="{{ name }}" type="password" value="" placeholder="Вставьте ключ..."
+          class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+        {% endif %}
       </div>
       {% endmacro %}
-      {{ key_field("groq_key", "Groq API Key", "бесплатно на groq.com", "gsk_...", user.user_groq_api_key, server_keys.groq) }}
-      {{ key_field("gemini_key", "Google AI API Key", "Gemini, бесплатно на aistudio.google.com", "AIza...", user.user_gemini_api_key, server_keys.gemini) }}
-      {{ key_field("anthropic_key", "Anthropic API Key", "Claude, платный", "sk-ant-...", user.user_anthropic_api_key, server_keys.anthropic) }}
-      {{ key_field("gigachat_key", "GigaChat Auth Key", "Сбер, бесплатно на developers.sber.ru", "MDE5...", user.user_gigachat_auth_key, server_keys.gigachat) }}
-      {{ key_field("openai_key", "OpenAI API Key", "Whisper транскрипция, платный", "sk-...", user.user_openai_api_key, server_keys.openai) }}
+      {{ key_field("groq_key", "Groq API Key", "бесплатно на groq.com", "groq", user.user_groq_api_key, server_keys_masked.groq) }}
+      {{ key_field("gemini_key", "Google AI API Key", "Gemini, бесплатно", "gemini", user.user_gemini_api_key, server_keys_masked.gemini) }}
+      {{ key_field("anthropic_key", "Anthropic API Key", "Claude, платный", "claude", user.user_anthropic_api_key, server_keys_masked.anthropic) }}
+      {{ key_field("gigachat_key", "GigaChat Auth Key", "Сбер, бесплатно", "gigachat", user.user_gigachat_auth_key, server_keys_masked.gigachat) }}
+      {{ key_field("openai_key", "OpenAI API Key", "транскрипция, платный", "openai", user.user_openai_api_key, server_keys_masked.openai) }}
       <button type="submit" class="z-btn z-btn-primary px-5 py-2 text-[12px]">Сохранить ключи</button>
       <span id="keySaveStatus" class="text-[12px] text-ok ml-2 hidden">Сохранено!</span>
     </form>
@@ -377,6 +394,31 @@ function getTelegramLink() {
       window.open(link, '_blank');
     }
   });
+}
+
+function checkKeyStatus(providerId) {
+  const icon = document.getElementById('status-icon-' + providerId);
+  const text = document.getElementById('status-text-' + providerId);
+  // Спиннер
+  icon.className = 'inline-block w-3 h-3 rounded-full border-2 border-amber-400 border-t-transparent animate-spin';
+  text.textContent = '...';
+  fetch('/settings/health/' + (providerId === 'openai' ? 'transcription' : 'llm') + '?provider=' + providerId)
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        icon.className = 'inline-block w-3 h-3 rounded-full bg-green-500';
+        text.textContent = 'Работает';
+        text.className = text.className.replace('text-g-500', 'text-green-600');
+      } else {
+        icon.className = 'inline-block w-3 h-3 rounded-full bg-red-500';
+        text.textContent = data.error ? 'Ошибка' : 'Не работает';
+        text.className = text.className.replace('text-g-500', 'text-red-500');
+      }
+    })
+    .catch(() => {
+      icon.className = 'inline-block w-3 h-3 rounded-full bg-red-500';
+      text.textContent = 'Ошибка';
+    });
 }
 
 document.getElementById('apiKeysForm').addEventListener('submit', function(e) {
