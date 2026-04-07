@@ -196,6 +196,33 @@ def upload_audio_fallback(server: str, token: str, filepath: Path) -> bool:
         return False
 
 
+def _transcript_cache_path(filepath: Path) -> Path:
+    """Путь к локальному кешу транскрипта (рядом с аудио)."""
+    return filepath.parent / f".{filepath.stem}.transcript.json"
+
+
+def _load_cached_transcript(filepath: Path) -> dict | None:
+    """Загружает кешированный транскрипт, если есть."""
+    cache = _transcript_cache_path(filepath)
+    if cache.exists():
+        try:
+            data = json.loads(cache.read_text())
+            if data.get("full_text"):
+                return data
+        except Exception:
+            pass
+    return None
+
+
+def _save_transcript_cache(filepath: Path, result: dict):
+    """Сохраняет транскрипт локально, чтобы не слать в Буквицу повторно."""
+    cache = _transcript_cache_path(filepath)
+    try:
+        cache.write_text(json.dumps(result, ensure_ascii=False))
+    except Exception:
+        pass
+
+
 async def process_file(filepath: Path, cfg: dict) -> bool:
     """Обработка одного файла: Буквица → сервер."""
     mode = cfg.get("mode", "full")
@@ -207,18 +234,26 @@ async def process_file(filepath: Path, cfg: dict) -> bool:
 
     # Полный режим: локальная Буквица → транскрипт → сервер
     try:
-        from bukvitsa_local import transcribe
+        # Проверяем кеш — если транскрипт уже есть, не шлём в Буквицу повторно
+        result = _load_cached_transcript(filepath)
+        if result:
+            print(f"  📋 Транскрипт из кеша (уже расшифрован ранее)", flush=True)
+        else:
+            from bukvitsa_local import transcribe
 
-        api_id = cfg.get("api_id", DEFAULT_API_ID)
-        api_hash = cfg.get("api_hash", DEFAULT_API_HASH)
-        bot = cfg.get("bot_username", DEFAULT_BOT)
+            api_id = cfg.get("api_id", DEFAULT_API_ID)
+            api_hash = cfg.get("api_hash", DEFAULT_API_HASH)
+            bot = cfg.get("bot_username", DEFAULT_BOT)
 
-        print(f"  🎙 Транскрибация через Буквицу...", flush=True)
-        result = await transcribe(str(filepath), api_id, api_hash, bot)
+            print(f"  🎙 Транскрибация через Буквицу...", flush=True)
+            result = await transcribe(str(filepath), api_id, api_hash, bot)
 
-        if not result.get("full_text"):
-            print(f"  ⚠️  Пустой транскрипт, загружаю аудио на сервер...", flush=True)
-            return upload_audio_fallback(server, token, filepath)
+            if not result.get("full_text"):
+                print(f"  ⚠️  Пустой транскрипт, загружаю аудио на сервер...", flush=True)
+                return upload_audio_fallback(server, token, filepath)
+
+            # Сохраняем в кеш
+            _save_transcript_cache(filepath, result)
 
         word_count = len(result["full_text"].split())
         print(f"  📝 Транскрипт: {len(result['full_text'])} символов, ~{word_count} слов", flush=True)

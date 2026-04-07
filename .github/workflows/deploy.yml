@@ -19,5 +19,6 @@ jobs:
           script: |
             cd /opt/zoomhub
             git pull origin main
-            docker compose build --no-cache app
-            docker compose up -d
+            source venv/bin/activate
+            pip install -q -r requirements.txt
+            systemctl restart zoomhub
