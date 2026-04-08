@@ -35,6 +35,11 @@ def _make_gigachat(api_key: str | None = None) -> LLMProvider:
     return GigaChatProvider(auth_key=api_key)
 
 
+def _make_deepseek(api_key: str | None = None) -> LLMProvider:
+    from app.services.providers.deepseek_provider import DeepSeekProvider
+    return DeepSeekProvider(api_key=api_key)
+
+
 def get_llm_provider() -> LLMProvider:
     """Возвращает текущий LLM-провайдер (singleton, пересоздаётся при смене)."""
     global _llm_instance
@@ -54,6 +59,8 @@ def get_llm_provider() -> LLMProvider:
         _llm_instance = _make_groq()
     elif LLM_PROVIDER == "gigachat":
         _llm_instance = _make_gigachat()
+    elif LLM_PROVIDER == "deepseek":
+        _llm_instance = _make_deepseek()
     elif LLM_PROVIDER == "auto":
         _llm_instance = _make_gigachat()  # default для auto — GigaChat (бесплатный, работает из РФ)
     else:
@@ -83,6 +90,8 @@ def get_provider_for_text(text_length: int) -> LLMProvider:
         provider = _make_groq()
     elif LLM_PROVIDER == "gigachat":
         provider = _make_gigachat()
+    elif LLM_PROVIDER == "deepseek":
+        provider = _make_deepseek()
     elif LLM_PROVIDER == "auto":
         from app.config import GIGACHAT_AUTH_KEY
         if GIGACHAT_AUTH_KEY:
@@ -155,6 +164,7 @@ def make_provider_by_name(name: str, user_keys: dict | None = None) -> LLMProvid
         "claude": _make_claude,
         "ollama": _make_ollama,
         "gigachat": _make_gigachat,
+        "deepseek": _make_deepseek,
     }
     factory = factories.get(name)
     if not factory:
@@ -178,14 +188,17 @@ def get_user_keys(user) -> dict:
         keys["openai"] = user.user_openai_api_key
     if getattr(user, "user_gigachat_auth_key", None):
         keys["gigachat"] = user.user_gigachat_auth_key
+    if getattr(user, "user_deepseek_api_key", None):
+        keys["deepseek"] = user.user_deepseek_api_key
     return keys
 
 
 def get_available_providers() -> list[dict]:
     """Возвращает список провайдеров с информацией о доступности."""
-    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY
+    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY
 
     return [
+        {"name": "deepseek", "label": "DeepSeek V3 (128K)", "available": bool(DEEPSEEK_API_KEY)},
         {"name": "groq", "label": "Groq (Llama 3.3 70B)", "available": bool(GROQ_API_KEY)},
         {"name": "gemini", "label": "Gemini Flash", "available": bool(GOOGLE_AI_API_KEY)},
         {"name": "claude", "label": "Claude Sonnet", "available": bool(ANTHROPIC_API_KEY)},
