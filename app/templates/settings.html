@@ -104,11 +104,19 @@
         <input name="{{ name }}" type="password" value="{{ user_value }}"
           class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
         {% elif server_key_masked %}
-        <div class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono text-g-500 flex items-center justify-between">
-          <span>{{ server_key_masked }}</span>
-          <span class="text-[10px] text-zoom font-semibold">серверный</span>
+        <div id="server-key-{{ provider_id }}" class="flex items-center gap-2">
+          <div class="z-input flex-1 bg-g-50 px-3 py-2 text-[12px] font-mono text-g-500 flex items-center justify-between">
+            <span>{{ server_key_masked }}</span>
+            <span class="text-[10px] text-zoom font-semibold">серверный</span>
+          </div>
+          <button type="button" onclick="showOwnKeyInput('{{ provider_id }}')" class="text-[11px] text-zoom hover:underline whitespace-nowrap">Свой ключ</button>
         </div>
-        <input name="{{ name }}" type="hidden" value="">
+        <div id="own-key-{{ provider_id }}" class="hidden flex items-center gap-2">
+          <input id="own-input-{{ provider_id }}" type="password" value="" placeholder="Вставьте свой ключ..."
+            class="z-input flex-1 bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
+          <button type="button" onclick="hideOwnKeyInput('{{ provider_id }}')" class="text-[11px] text-g-400 hover:text-g-600 whitespace-nowrap">Отмена</button>
+        </div>
+        <input id="hidden-key-{{ provider_id }}" name="{{ name }}" type="hidden" value="">
         {% else %}
         <input name="{{ name }}" type="password" value="" placeholder="Вставьте ключ..."
           class="z-input w-full bg-g-50 px-3 py-2 text-[12px] font-mono placeholder-g-400">
@@ -404,7 +412,25 @@ function generateAgentToken() {
   });
 }
 
-/* Claude Panel JS removed — feature not yet implemented */
+function showOwnKeyInput(providerId) {
+  const hidden = document.getElementById('hidden-key-' + providerId);
+  const ownInput = document.getElementById('own-input-' + providerId);
+  ownInput.name = hidden.name;
+  hidden.removeAttribute('name');
+  document.getElementById('server-key-' + providerId).classList.add('hidden');
+  document.getElementById('own-key-' + providerId).classList.remove('hidden');
+  ownInput.focus();
+}
+
+function hideOwnKeyInput(providerId) {
+  const hidden = document.getElementById('hidden-key-' + providerId);
+  const ownInput = document.getElementById('own-input-' + providerId);
+  hidden.name = ownInput.name;
+  ownInput.removeAttribute('name');
+  ownInput.value = '';
+  document.getElementById('server-key-' + providerId).classList.remove('hidden');
+  document.getElementById('own-key-' + providerId).classList.add('hidden');
+}
 
 function tgSendCode() {
   const apiId = document.getElementById('tgApiId').value.trim();
