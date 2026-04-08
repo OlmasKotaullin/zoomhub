@@ -42,6 +42,7 @@ GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_AI_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GIGACHAT_AUTH_KEY = os.environ.get("GIGACHAT_AUTH_KEY", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 TELEGRAM_API_ID = int(os.environ.get("TELEGRAM_API_ID") or "0")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
@@ -53,7 +54,7 @@ ZOOM_ACCOUNT_ID = os.environ.get("ZOOM_ACCOUNT_ID", "")
 ZOOM_USER_EMAIL = os.environ.get("ZOOM_USER_EMAIL", "")
 
 # --- Providers ---
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "auto")  # auto | claude | ollama | gemini | groq | deepseek
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "auto")  # auto | claude | ollama | gemini | groq | deepseek | openrouter
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 AUTO_ROUTING_THRESHOLD = 10000  # символов — выше → Claude, ниже → Ollama
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")

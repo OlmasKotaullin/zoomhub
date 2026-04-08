@@ -80,6 +80,7 @@ class User(Base):
     user_anthropic_api_key = Column(String(500), nullable=True)
     user_openai_api_key = Column(String(500), nullable=True)
     user_deepseek_api_key = Column(String(500), nullable=True)
+    user_openrouter_api_key = Column(String(500), nullable=True)
     # Claude Panel customization
     claude_system_prompt = Column(Text, nullable=True)
     claude_memories = Column(JSON, default=list)

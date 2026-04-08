@@ -42,7 +42,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         trans_ok = False
 
     # Маскированные серверные ключи (показать что ключ есть, но не раскрывать)
-    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, GIGACHAT_AUTH_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY
+    from app.config import GROQ_API_KEY, GOOGLE_AI_API_KEY, GIGACHAT_AUTH_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY
 
     def mask_key(key):
         if not key: return ""
@@ -56,6 +56,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "gigachat": bool(GIGACHAT_AUTH_KEY),
         "openai": bool(OPENAI_API_KEY),
         "deepseek": bool(DEEPSEEK_API_KEY),
+        "openrouter": bool(OPENROUTER_API_KEY),
     }
     server_keys_masked = {
         "groq": mask_key(GROQ_API_KEY) if GROQ_API_KEY else "",
@@ -64,6 +65,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "gigachat": mask_key(GIGACHAT_AUTH_KEY) if GIGACHAT_AUTH_KEY else "",
         "openai": mask_key(OPENAI_API_KEY) if OPENAI_API_KEY else "",
         "deepseek": mask_key(DEEPSEEK_API_KEY) if DEEPSEEK_API_KEY else "",
+        "openrouter": mask_key(OPENROUTER_API_KEY) if OPENROUTER_API_KEY else "",
     }
 
     # Буквица: серверная или пользовательская сессия
@@ -232,6 +234,7 @@ async def save_api_keys(
     gigachat_key: str = Form(""),
     openai_key: str = Form(""),
     deepseek_key: str = Form(""),
+    openrouter_key: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Сохраняет пользовательские API-ключи."""
@@ -245,6 +248,7 @@ async def save_api_keys(
     user.user_gigachat_auth_key = gigachat_key.strip() or None
     user.user_openai_api_key = openai_key.strip() or None
     user.user_deepseek_api_key = deepseek_key.strip() or None
+    user.user_openrouter_api_key = openrouter_key.strip() or None
     db.commit()
 
     return {"status": "ok"}

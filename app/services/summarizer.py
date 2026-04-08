@@ -35,6 +35,7 @@ CONTEXT_LIMITS = {
     "groq": 100000,     # 128K токенов (Llama 3.3 70B) — до 2ч встречи
     "claude": 100000,
     "deepseek": 100000,  # 128K токенов — до 2ч встречи
+    "openrouter": 50000,  # 65K токенов (Llama 3.3 70B) — до 1ч встречи
     "gigachat": 12000,   # ~8K токенов — слабая модель, мало контекста
     "ollama": 12000,     # ~16K токенов при num_ctx=16384
 }
@@ -53,7 +54,7 @@ async def generate_summary(transcript_text: str, provider_name: str | None = Non
     Returns:
         {"tldr": str, "tasks": list, "topics": list, "insights": list, "raw_response": str}
     """
-    from app.config import GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY
+    from app.config import GOOGLE_AI_API_KEY, ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY
 
     if provider_name:
         providers = [make_provider_by_name(provider_name)]
@@ -76,6 +77,8 @@ async def generate_summary(transcript_text: str, provider_name: str | None = Non
             providers.append(make_provider_by_name("gemini"))
         if primary != "deepseek" and DEEPSEEK_API_KEY:
             providers.append(make_provider_by_name("deepseek"))
+        if primary != "openrouter" and OPENROUTER_API_KEY:
+            providers.append(make_provider_by_name("openrouter"))
         if primary != "claude" and ANTHROPIC_API_KEY:
             providers.append(make_provider_by_name("claude"))
 

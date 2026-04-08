@@ -111,6 +111,9 @@ def init_db():
             if "user_deepseek_api_key" not in user_cols:
                 migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS user_deepseek_api_key VARCHAR(500)")
 
+            if "user_openrouter_api_key" not in user_cols:
+                migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS user_openrouter_api_key VARCHAR(500)")
+
             # chat_messages: user_id, edited_at
             if insp.has_table("chat_messages"):
                 chat_cols = {col["name"] for col in insp.get_columns("chat_messages")}
