@@ -16,3 +16,4 @@ alembic/versions/__pycache__/
 *.session-journal
 agent/build/
 agent/dist/
+.keys.local
