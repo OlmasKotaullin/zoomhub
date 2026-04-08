@@ -48,11 +48,16 @@
           {{ 'bg-zoom text-white border-zoom' if llm_provider == 'gigachat' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
         💬 GigaChat <span class="text-[10px] opacity-70">(бесплатно)</span>
       </button>
+      <button onclick="switchLLM('deepseek')" id="btn-llm-deepseek"
+        class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
+          {{ 'bg-zoom text-white border-zoom' if llm_provider == 'deepseek' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
+        🐋 DeepSeek <span class="text-[10px] opacity-70">(дешёвый)</span>
+      </button>
     </div>
     <div class="text-[12px] text-g-400">
       {% if llm_provider == 'auto' %}
         <p>Автоматический выбор лучшего доступного провайдера.</p>
-        <p class="mt-1 text-ok/70">GigaChat → Gemini → Groq → Claude</p>
+        <p class="mt-1 text-ok/70">GigaChat → DeepSeek → Gemini → Groq → Claude</p>
       {% elif llm_provider == 'groq' %}
         <p>Модель: <strong class="text-g-600">Llama 3.3 70B</strong> — бесплатно, 128K контекст, сверхбыстрый</p>
         <p class="mt-1 text-ok/70">Встречи до 2 часов помещаются целиком</p>
@@ -65,6 +70,9 @@
       {% elif llm_provider == 'gigachat' %}
         <p>Модель: <strong class="text-g-600">GigaChat (Сбер)</strong> — бесплатно, российский, ~900K токенов/мес</p>
         <p class="mt-1 text-ok/70">Получить ключ: developers.sber.ru/studio</p>
+      {% elif llm_provider == 'deepseek' %}
+        <p>Модель: <strong class="text-g-600">DeepSeek V3</strong> — 128K контекст, $0.28/M токенов, работает из РФ</p>
+        <p class="mt-1 text-ok/70">Получить ключ: platform.deepseek.com</p>
       {% else %}
         <p>Модель: <strong class="text-g-600">Claude Sonnet</strong> — лучшее качество, весь контекст</p>
         {% if not claude_ok %}<p class="mt-1 text-err/70">Добавьте <code class="text-zoom font-mono bg-zoom-light px-1.5 py-0.5 rounded text-[11px]">ANTHROPIC_API_KEY</code> в .env</p>{% endif %}
@@ -111,6 +119,7 @@
       {{ key_field("gemini_key", "Google AI API Key", "Gemini, бесплатно", "gemini", user.user_gemini_api_key, server_keys_masked.gemini) }}
       {{ key_field("anthropic_key", "Anthropic API Key", "Claude, платный", "claude", user.user_anthropic_api_key, server_keys_masked.anthropic) }}
       {{ key_field("gigachat_key", "GigaChat Auth Key", "Сбер, бесплатно", "gigachat", user.user_gigachat_auth_key, server_keys_masked.gigachat) }}
+      {{ key_field("deepseek_key", "DeepSeek API Key", "дешёвый, 128K контекст", "deepseek", user.user_deepseek_api_key, server_keys_masked.deepseek) }}
       {{ key_field("openai_key", "OpenAI API Key", "транскрипция, платный", "openai", user.user_openai_api_key, server_keys_masked.openai) }}
       <button type="submit" class="z-btn z-btn-primary px-5 py-2 text-[12px]">Сохранить ключи</button>
       <span id="keySaveStatus" class="text-[12px] text-ok ml-2 hidden">Сохранено!</span>
