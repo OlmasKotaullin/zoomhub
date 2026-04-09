@@ -281,7 +281,7 @@ async def check_provider_health(request: Request, provider_type: str, provider: 
         try:
             result = await p.generate(
                 messages=[{"role": "user", "content": "Ответь одним словом: привет"}],
-                system="", max_tokens=10,
+                system="", max_tokens=50,
             )
             if result:
                 return {"ok": True, "provider": p.name, "status": "active", "message": "Работает"}
