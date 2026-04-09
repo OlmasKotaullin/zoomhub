@@ -132,6 +132,46 @@ function scrollDown() {
   el.scrollTop = el.scrollHeight;
 }
 
+function htmlToMarkdown(el) {
+  const parts = [];
+  el.childNodes.forEach(node => {
+    if (node.nodeType === 3) {
+      const t = node.textContent.trim();
+      if (t) parts.push(t);
+    } else if (node.tagName === 'TABLE') {
+      const rows = node.querySelectorAll('tr');
+      rows.forEach((row, i) => {
+        const cells = row.querySelectorAll('th, td');
+        const line = '| ' + Array.from(cells).map(c => c.innerText.trim()).join(' | ') + ' |';
+        parts.push(line);
+        if (i === 0) {
+          parts.push('| ' + Array.from(cells).map(() => '---').join(' | ') + ' |');
+        }
+      });
+      parts.push('');
+    } else if (node.tagName === 'UL' || node.tagName === 'OL') {
+      node.querySelectorAll('li').forEach((li, i) => {
+        parts.push((node.tagName === 'OL' ? (i+1) + '. ' : '- ') + li.innerText.trim());
+      });
+      parts.push('');
+    } else if (node.tagName && node.tagName.match(/^H[1-6]$/)) {
+      const level = parseInt(node.tagName[1]);
+      parts.push('#'.repeat(level) + ' ' + node.innerText.trim());
+    } else if (node.tagName === 'P') {
+      parts.push(node.innerText.trim());
+      parts.push('');
+    } else if (node.tagName === 'STRONG' || node.tagName === 'B') {
+      parts.push('**' + node.innerText.trim() + '**');
+    } else if (node.tagName === 'EM' || node.tagName === 'I') {
+      parts.push('*' + node.innerText.trim() + '*');
+    } else {
+      const t = node.innerText || node.textContent;
+      if (t && t.trim()) parts.push(t.trim());
+    }
+  });
+  return parts.join('\n').trim();
+}
+
 function renderMd(text) {
   if (typeof marked === 'undefined') return text;
   // Починка невалидных таблиц: нормализуем разделители
@@ -320,24 +360,43 @@ function editThis(btn) {
   actions._origHtml = contentEl.innerHTML;
   actions._origText = actions._text;
 
-  // Заменяем rendered HTML на textarea с markdown-исходником
-  const ta = document.createElement('textarea');
-  ta.value = actions._text || contentEl.innerText;
-  ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
-  ta.style.minHeight = '120px';
-  ta.style.maxHeight = '400px';
-  // Автовысота
-  ta.style.height = Math.min(400, Math.max(120, ta.value.split('\n').length * 20 + 40)) + 'px';
-  contentEl.style.display = 'none';
-  contentEl.parentElement.insertBefore(ta, contentEl.nextSibling);
-  actions._textarea = ta;
-  ta.focus();
+  const hasTable = contentEl.querySelector('table');
 
-  // Escape для отмены
-  ta._editActions = actions;
-  ta.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') { cancelEditByActions(actions); }
-  });
+  if (hasTable) {
+    // Визуальное редактирование — contenteditable на рендеренном HTML
+    contentEl.contentEditable = 'true';
+    contentEl.classList.add('ring-2', 'ring-zoom', 'rounded-xl', 'p-2', 'outline-none');
+    contentEl.focus();
+    actions._editMode = 'visual';
+
+    // Делаем ячейки таблицы редактируемыми
+    contentEl.querySelectorAll('td, th').forEach(cell => {
+      cell.style.minWidth = '60px';
+      cell.style.padding = '6px 10px';
+      cell.style.border = '1px solid #d1d5db';
+    });
+
+    contentEl.addEventListener('keydown', function escHandler(e) {
+      if (e.key === 'Escape') { cancelEditByActions(actions); contentEl.removeEventListener('keydown', escHandler); }
+    });
+  } else {
+    // Текстовое редактирование — textarea с markdown
+    const ta = document.createElement('textarea');
+    ta.value = actions._text || contentEl.innerText;
+    ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
+    ta.style.minHeight = '120px';
+    ta.style.maxHeight = '400px';
+    ta.style.height = Math.min(400, Math.max(120, ta.value.split('\n').length * 20 + 40)) + 'px';
+    contentEl.style.display = 'none';
+    contentEl.parentElement.insertBefore(ta, contentEl.nextSibling);
+    actions._textarea = ta;
+    actions._editMode = 'text';
+    ta.focus();
+
+    ta.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { cancelEditByActions(actions); }
+    });
+  }
 
   // Заменяем кнопки на Сохранить / Отмена
   const btnClass = 'flex items-center gap-1.5 text-[11px] transition px-2 py-1 rounded-lg';
@@ -356,7 +415,12 @@ async function saveEdit(btn) {
   if (!contentEl) { btn.disabled = false; return; }
 
   const ta = actions._textarea;
-  const newText = (ta ? ta.value : contentEl.innerText).trim();
+  let newText;
+  if (actions._editMode === 'visual') {
+    newText = htmlToMarkdown(contentEl);
+  } else {
+    newText = (ta ? ta.value : contentEl.innerText).trim();
+  }
   if (!newText) { cancelEdit(btn); return; }
 
   // Сохраняем на сервер (до обновления UI — чтобы откатить при ошибке)
@@ -389,9 +453,14 @@ async function saveEdit(btn) {
     }
   }
 
-  // Убираем textarea, показываем contentEl
-  if (ta && ta.parentElement) ta.remove();
-  contentEl.style.display = '';
+  // Убираем режим редактирования
+  if (actions._editMode === 'visual') {
+    contentEl.contentEditable = 'false';
+    contentEl.classList.remove('ring-2', 'ring-zoom', 'rounded-xl', 'p-2', 'outline-none');
+  } else {
+    if (ta && ta.parentElement) ta.remove();
+    contentEl.style.display = '';
+  }
 
   // Рендерим markdown
   contentEl.innerHTML = renderMd(newText);
@@ -464,15 +533,20 @@ function cancelEditByActions(actions) {
   const contentEl = actions._contentEl;
   if (!contentEl) return;
 
-  // Убираем textarea
-  const ta = actions._textarea;
-  if (ta && ta.parentElement) ta.remove();
-  actions._textarea = null;
-  contentEl.style.display = '';
+  if (actions._editMode === 'visual') {
+    contentEl.contentEditable = 'false';
+    contentEl.classList.remove('ring-2', 'ring-zoom', 'rounded-xl', 'p-2', 'outline-none');
+  } else {
+    const ta = actions._textarea;
+    if (ta && ta.parentElement) ta.remove();
+    actions._textarea = null;
+    contentEl.style.display = '';
+  }
 
   contentEl.innerHTML = actions._origHtml || '';
 
   actions._text = actions._origText || '';
+  actions._editMode = null;
   restoreActionButtons(actions);
 }
 
