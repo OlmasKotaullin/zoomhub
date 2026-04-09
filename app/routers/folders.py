@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.database import get_db
 from app.deps import templates, get_current_user_optional, get_user_folder
-from app.models import Folder, Meeting
+from app.models import Folder, Meeting, InviteCode
 from app.config import (
     ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, ZOOM_ACCOUNT_ID,
     TELEGRAM_API_ID, TELEGRAM_API_HASH, BUKVITSA_BOT_USERNAME,
@@ -89,6 +89,7 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         "whisper_model": config_module.WHISPER_MODEL,
         "server_keys": server_keys,
         "server_keys_masked": server_keys_masked,
+        "user_invites": db.query(InviteCode).filter(InviteCode.owner_id == user.id).all(),
     })
 
 

@@ -110,6 +110,11 @@ async def admin_users(request: Request, db: Session = Depends(get_db)):
         # Conversion rate
         conversion = round(ready_count / meeting_count * 100) if meeting_count else 0
 
+        invite_count = db.query(func.count(InviteCode.id)).filter(InviteCode.owner_id == u.id).scalar()
+        invite_available = db.query(func.count(InviteCode.id)).filter(
+            InviteCode.owner_id == u.id, InviteCode.used_count < InviteCode.max_uses
+        ).scalar()
+
         users_data.append({
             "user": u,
             "meetings": meeting_count,
@@ -118,6 +123,8 @@ async def admin_users(request: Request, db: Session = Depends(get_db)):
             "hours": hours,
             "last_meeting": last_meeting,
             "conversion": conversion,
+            "invites_total": invite_count,
+            "invites_available": invite_available,
         })
 
     return templates.TemplateResponse("admin.html", {
@@ -225,3 +232,23 @@ async def create_invite(
     db.commit()
 
     return RedirectResponse("/admin/invites", status_code=303)
+
+
+@router.post("/users/{user_id}/give-invites", response_class=HTMLResponse)
+async def give_invites(
+    request: Request, user_id: int, count: int = Form(2), db: Session = Depends(get_db),
+):
+    admin = _require_admin(request, db)
+    if not admin:
+        return RedirectResponse("/", status_code=302)
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        return RedirectResponse("/admin/users", status_code=303)
+
+    for _ in range(min(count, 5)):
+        code = f"ZH-{secrets.token_hex(3).upper()}"
+        db.add(InviteCode(code=code, max_uses=1, owner_id=target.id))
+    db.commit()
+
+    return RedirectResponse("/admin/users", status_code=303)

@@ -323,7 +323,39 @@
     </div>
   </div>
 
-  <!-- Claude Panel Settings — скрыт до реализации функционала -->
+  <!-- Инвайт-коды -->
+  <div class="z-card p-5 anim-up" style="animation-delay:0.24s">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-[15px]">Приглашения</h3>
+      <span class="text-[11px] text-g-400">Пригласите коллег в ZoomHub</span>
+    </div>
+    <p class="text-[13px] text-g-500 mb-4">У вас есть персональные инвайт-коды. Каждый код — одноразовый.</p>
+    {% if user_invites %}
+    <div class="space-y-2">
+      {% for inv in user_invites %}
+      <div class="flex items-center justify-between bg-g-50 rounded-xl px-4 py-3">
+        <div class="flex items-center gap-3">
+          <code class="text-[14px] font-mono font-bold text-zoom tracking-wider">{{ inv.code }}</code>
+          {% if inv.used_count >= inv.max_uses %}
+            <span class="text-[10px] font-semibold text-g-400 bg-g-200 px-2 py-0.5 rounded-full">Использован</span>
+          {% else %}
+            <span class="text-[10px] font-semibold text-ok bg-ok/10 px-2 py-0.5 rounded-full">Активный</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+          {% if inv.used_count >= inv.max_uses and inv.used_by %}
+            <span class="text-[11px] text-g-400">→ {{ inv.used_by.name }}</span>
+          {% elif inv.used_count < inv.max_uses %}
+            <button onclick="copyInvite('{{ inv.code }}')" class="text-[11px] text-zoom hover:underline">Скопировать</button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-[13px] text-g-400">У вас пока нет инвайт-кодов.</p>
+    {% endif %}
+  </div>
 
 </div>
 
@@ -418,6 +450,13 @@ function generateAgentToken() {
         alert('Токен скопирован в буфер обмена');
       });
     }
+  });
+}
+
+function copyInvite(code) {
+  navigator.clipboard.writeText(code).then(() => {
+    event.target.textContent = 'Скопировано!';
+    setTimeout(() => { event.target.textContent = 'Скопировать'; }, 2000);
   });
 }
 

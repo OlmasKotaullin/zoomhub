@@ -98,6 +98,7 @@
           <th class="px-3 py-3 font-semibold">Конверсия</th>
           <th class="px-3 py-3 font-semibold">Последняя</th>
           <th class="px-3 py-3 font-semibold">Статус</th>
+          <th class="px-3 py-3 font-semibold">Инвайты</th>
           <th class="px-3 py-3 font-semibold"></th>
         </tr>
       </thead>
@@ -128,6 +129,10 @@
             {% endif %}
           </td>
           <td class="px-3 py-3">
+            <span class="text-[11px] font-medium {% if ud.invites_available > 0 %}text-ok{% else %}text-g-400{% endif %}">{{ ud.invites_available }}/{{ ud.invites_total }}</span>
+          </td>
+          <td class="px-3 py-3">
+            <div class="flex items-center gap-1">
             {% if not ud.user.is_admin %}
             <form action="/admin/users/{{ ud.user.id }}/toggle" method="POST">
               <button type="submit" class="z-btn text-[10px] px-2 py-1 {% if ud.user.is_active %}text-err border border-err/20 hover:bg-red-50{% else %}text-ok border border-ok/20 hover:bg-green-50{% endif %}">
@@ -137,6 +142,10 @@
             {% else %}
             <span class="text-[10px] text-ai font-semibold">admin</span>
             {% endif %}
+            <form action="/admin/users/{{ ud.user.id }}/give-invites" method="POST">
+              <button type="submit" class="z-btn text-[10px] px-2 py-1 text-zoom border border-zoom/20 hover:bg-zoom/5" title="Выдать 2 инвайт-кода">+Инв</button>
+            </form>
+            </div>
           </td>
         </tr>
         {% endfor %}

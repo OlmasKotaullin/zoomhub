@@ -114,6 +114,15 @@ def init_db():
             if "user_openrouter_api_key" not in user_cols:
                 migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS user_openrouter_api_key VARCHAR(500)")
 
+            # invite_codes: owner_id, used_by_id
+            if insp.has_table("invite_codes"):
+                inv_cols = {col["name"] for col in insp.get_columns("invite_codes")}
+                if "owner_id" not in inv_cols:
+                    migrations += [
+                        "ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id)",
+                        "ALTER TABLE invite_codes ADD COLUMN IF NOT EXISTS used_by_id INTEGER REFERENCES users(id)",
+                    ]
+
             # chat_messages: user_id, edited_at
             if insp.has_table("chat_messages"):
                 chat_cols = {col["name"] for col in insp.get_columns("chat_messages")}

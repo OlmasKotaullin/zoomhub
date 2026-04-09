@@ -121,7 +121,19 @@ async def register(
     if invite:
         user.invite_code_id = invite.id
         invite.used_count += 1
+        invite.used_by_id = None  # will set after user.id is known
     db.add(user)
+    db.flush()  # get user.id
+
+    if invite:
+        invite.used_by_id = user.id
+
+    # Автогенерация 2 персональных инвайт-кодов для нового юзера
+    import secrets as _secrets
+    for _ in range(2):
+        code = f"ZH-{_secrets.token_hex(3).upper()}"
+        db.add(InviteCode(code=code, max_uses=1, owner_id=user.id))
+
     db.commit()
     db.refresh(user)
     return _login_response(user.id, redirect_to="/onboarding")

@@ -49,6 +49,11 @@ class InviteCode(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
     expires_at = Column(DateTime, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    used_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    owner = relationship("User", foreign_keys=[owner_id])
+    used_by = relationship("User", foreign_keys=[used_by_id])
 
 
 class User(Base):
