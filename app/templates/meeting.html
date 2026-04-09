@@ -380,28 +380,102 @@ function copyMeetingResponse() {
   });
 }
 
+function _parseTable(text) {
+  const lines = text.split('\n').filter(l => l.trim().startsWith('|') && l.trim().endsWith('|'));
+  if (lines.length < 2) return null;
+  const rows = [];
+  for (const line of lines) {
+    const cells = line.split('|').slice(1, -1).map(c => c.trim());
+    if (cells.every(c => /^[-:\s]+$/.test(c))) continue;
+    if (cells.length > 0) rows.push(cells);
+  }
+  return rows.length >= 2 ? rows : null;
+}
+
+function _buildEditor(rows) {
+  const colCount = Math.max(...rows.map(r => r.length));
+  let html = '<table class="w-full border-collapse text-[13px] mb-2">';
+  rows.forEach((row, ri) => {
+    html += '<tr>';
+    for (let ci = 0; ci < colCount; ci++) {
+      const val = (row[ci] || '').replace(/"/g, '&quot;');
+      const tag = ri === 0 ? 'th' : 'td';
+      const style = 'border:1px solid #d1d5db;padding:4px 8px;' + (ri === 0 ? 'background:#f3f4f6;font-weight:600;' : '');
+      html += '<' + tag + ' style="' + style + '"><input type="text" value="' + val + '" class="w-full bg-transparent border-0 outline-none text-[13px] p-0 m-0" style="min-width:60px"></' + tag + '>';
+    }
+    html += '</tr>';
+  });
+  html += '</table>';
+  return html;
+}
+
+function _editorToMd(editorEl) {
+  const table = editorEl.querySelector('table');
+  if (!table) return '';
+  const rows = table.querySelectorAll('tr');
+  const lines = [];
+  rows.forEach((row, ri) => {
+    const inputs = row.querySelectorAll('input');
+    const cells = Array.from(inputs).map(inp => inp.value.trim());
+    lines.push('| ' + cells.join(' | ') + ' |');
+    if (ri === 0) lines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+  });
+  return lines.join('\n');
+}
+
 function editMeetingResponse() {
   const el = document.getElementById('meetingStreamContent');
   if (!el) return;
   const bar = document.getElementById('meetingActionBar');
 
-  // Сохраняем оригинал
   window._meetingOrigHtml = el.innerHTML;
   window._meetingOrigText = meetingStreamText;
 
-  // Textarea вместо contentEditable
-  const ta = document.createElement('textarea');
-  ta.value = meetingStreamText;
-  ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
-  ta.style.minHeight = '120px';
-  ta.style.maxHeight = '400px';
-  ta.style.height = Math.min(400, Math.max(120, ta.value.split('\n').length * 20 + 40)) + 'px';
-  el.style.display = 'none';
-  el.parentElement.insertBefore(ta, el.nextSibling);
-  window._meetingTextarea = ta;
-  ta.focus();
+  const rawText = meetingStreamText;
+  const tableRows = _parseTable(rawText);
 
-  ta.addEventListener('keydown', function(e) { if (e.key === 'Escape') cancelMeetingEdit(); });
+  if (tableRows) {
+    const beforeTable = [], afterTable = [];
+    let inTable = false;
+    rawText.split('\n').forEach(line => {
+      const isT = line.trim().startsWith('|') && line.trim().endsWith('|');
+      if (isT) inTable = true;
+      else if (!inTable) beforeTable.push(line);
+      else afterTable.push(line);
+    });
+
+    const editor = document.createElement('div');
+    editor.className = 'border-2 border-zoom rounded-xl p-3 bg-white';
+    if (beforeTable.join('').trim()) {
+      editor.innerHTML += '<div class="text-[13px] text-g-700 mb-2">' + renderMd(beforeTable.join('\n')) + '</div>';
+    }
+    editor.innerHTML += _buildEditor(tableRows);
+    if (afterTable.join('').trim()) {
+      const ata = document.createElement('textarea');
+      ata.value = afterTable.join('\n').trim();
+      ata.className = 'w-full text-[12px] text-g-500 mt-2 p-2 border border-g-200 rounded-lg resize-none outline-none';
+      ata.rows = 2;
+      editor.appendChild(ata);
+    }
+    el.style.display = 'none';
+    el.parentElement.insertBefore(editor, el.nextSibling);
+    window._meetingTableEditor = editor;
+    window._meetingBeforeTable = beforeTable.join('\n').trim();
+    window._meetingEditMode = 'table';
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = rawText;
+    ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
+    ta.style.minHeight = '120px';
+    ta.style.maxHeight = '400px';
+    ta.style.height = Math.min(400, Math.max(120, ta.value.split('\n').length * 20 + 40)) + 'px';
+    el.style.display = 'none';
+    el.parentElement.insertBefore(ta, el.nextSibling);
+    window._meetingTextarea = ta;
+    window._meetingEditMode = 'text';
+    ta.focus();
+    ta.addEventListener('keydown', function(e) { if (e.key === 'Escape') cancelMeetingEdit(); });
+  }
 
   const btnClass = 'flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg';
   bar.innerHTML =
@@ -411,8 +485,18 @@ function editMeetingResponse() {
 
 async function saveMeetingEdit() {
   const el = document.getElementById('meetingStreamContent');
-  const ta = window._meetingTextarea;
-  const newText = (ta ? ta.value : el.innerText).trim();
+  let newText;
+  if (window._meetingEditMode === 'table') {
+    const editor = window._meetingTableEditor;
+    const tableMd = _editorToMd(editor);
+    const before = window._meetingBeforeTable || '';
+    const afterTa = editor.querySelector('textarea');
+    const after = afterTa ? afterTa.value.trim() : '';
+    newText = [before, tableMd, after].filter(Boolean).join('\n\n');
+  } else {
+    const ta = window._meetingTextarea;
+    newText = (ta ? ta.value : el.innerText).trim();
+  }
   if (!newText) { cancelMeetingEdit(); return; }
 
   // Сохраняем на сервер
@@ -444,10 +528,17 @@ async function saveMeetingEdit() {
     }
   }
 
-  // Убираем textarea
-  if (ta && ta.parentElement) ta.remove();
-  window._meetingTextarea = null;
+  // Убираем редактор
+  if (window._meetingEditMode === 'table') {
+    if (window._meetingTableEditor) window._meetingTableEditor.remove();
+    window._meetingTableEditor = null;
+  } else {
+    const ta = window._meetingTextarea;
+    if (ta && ta.parentElement) ta.remove();
+    window._meetingTextarea = null;
+  }
   el.style.display = '';
+  window._meetingEditMode = null;
   meetingStreamText = newText;
 
   if (typeof marked !== 'undefined') {
@@ -469,12 +560,18 @@ async function saveMeetingEdit() {
 
 function cancelMeetingEdit() {
   const el = document.getElementById('meetingStreamContent');
-  const ta = window._meetingTextarea;
-  if (ta && ta.parentElement) ta.remove();
-  window._meetingTextarea = null;
+  if (window._meetingEditMode === 'table') {
+    if (window._meetingTableEditor) window._meetingTableEditor.remove();
+    window._meetingTableEditor = null;
+  } else {
+    const ta = window._meetingTextarea;
+    if (ta && ta.parentElement) ta.remove();
+    window._meetingTextarea = null;
+  }
   el.style.display = '';
   el.innerHTML = window._meetingOrigHtml || '';
   meetingStreamText = window._meetingOrigText || '';
+  window._meetingEditMode = null;
   restoreMeetingActionBar();
 }
 
