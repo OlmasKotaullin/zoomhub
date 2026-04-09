@@ -351,38 +351,97 @@ function copyThis(btn) {
   });
 }
 
+function parseMarkdownTable(text) {
+  const lines = text.split('\n').filter(l => l.trim().startsWith('|') && l.trim().endsWith('|'));
+  if (lines.length < 2) return null;
+  const rows = [];
+  for (const line of lines) {
+    const cells = line.split('|').slice(1, -1).map(c => c.trim());
+    if (cells.every(c => /^[-:\s]+$/.test(c))) continue; // separator row
+    if (cells.length > 0) rows.push(cells);
+  }
+  return rows.length >= 2 ? rows : null;
+}
+
+function buildTableEditor(rows) {
+  const colCount = Math.max(...rows.map(r => r.length));
+  let html = '<table class="w-full border-collapse text-[13px] mb-2">';
+  rows.forEach((row, ri) => {
+    html += '<tr>';
+    for (let ci = 0; ci < colCount; ci++) {
+      const val = (row[ci] || '').replace(/"/g, '&quot;');
+      const tag = ri === 0 ? 'th' : 'td';
+      const style = 'border:1px solid #d1d5db;padding:4px 8px;' + (ri === 0 ? 'background:#f3f4f6;font-weight:600;' : '');
+      html += '<' + tag + ' style="' + style + '"><input type="text" value="' + val + '" class="w-full bg-transparent border-0 outline-none text-[13px] p-0 m-0" style="min-width:60px"></' + tag + '>';
+    }
+    html += '</tr>';
+  });
+  html += '</table>';
+  return html;
+}
+
+function tableEditorToMarkdown(editorEl) {
+  const table = editorEl.querySelector('table');
+  if (!table) return '';
+  const rows = table.querySelectorAll('tr');
+  const lines = [];
+  rows.forEach((row, ri) => {
+    const inputs = row.querySelectorAll('input');
+    const cells = Array.from(inputs).map(inp => inp.value.trim());
+    lines.push('| ' + cells.join(' | ') + ' |');
+    if (ri === 0) {
+      lines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+    }
+  });
+  return lines.join('\n');
+}
+
 function editThis(btn) {
   const actions = btn.closest('div');
   const contentEl = actions._contentEl;
   if (!contentEl) return;
 
-  // Сохраняем оригинал
   actions._origHtml = contentEl.innerHTML;
   actions._origText = actions._text;
 
-  const hasTable = contentEl.querySelector('table');
+  const rawText = actions._text || contentEl.innerText;
+  const tableRows = parseMarkdownTable(rawText);
 
-  if (hasTable) {
-    // Визуальное редактирование — contenteditable на рендеренном HTML
-    contentEl.contentEditable = 'true';
-    contentEl.classList.add('ring-2', 'ring-zoom', 'rounded-xl', 'p-2', 'outline-none');
-    contentEl.focus();
-    actions._editMode = 'visual';
-
-    // Делаем ячейки таблицы редактируемыми
-    contentEl.querySelectorAll('td, th').forEach(cell => {
-      cell.style.minWidth = '60px';
-      cell.style.padding = '6px 10px';
-      cell.style.border = '1px solid #d1d5db';
+  if (tableRows) {
+    // Таблица — строим редактор с input в каждой ячейке
+    const beforeTable = [];
+    const afterTable = [];
+    const tableLines = [];
+    let inTable = false;
+    rawText.split('\n').forEach(line => {
+      const isTableLine = line.trim().startsWith('|') && line.trim().endsWith('|');
+      if (isTableLine) { inTable = true; tableLines.push(line); }
+      else if (!inTable) { beforeTable.push(line); }
+      else { afterTable.push(line); }
     });
 
-    contentEl.addEventListener('keydown', function escHandler(e) {
-      if (e.key === 'Escape') { cancelEditByActions(actions); contentEl.removeEventListener('keydown', escHandler); }
-    });
+    const editor = document.createElement('div');
+    editor.className = 'border-2 border-zoom rounded-xl p-3 bg-white';
+    if (beforeTable.join('').trim()) {
+      editor.innerHTML += '<div class="text-[13px] text-g-700 mb-2">' + renderMd(beforeTable.join('\n')) + '</div>';
+    }
+    editor.innerHTML += buildTableEditor(tableRows);
+    if (afterTable.join('').trim()) {
+      const afterDiv = document.createElement('textarea');
+      afterDiv.value = afterTable.join('\n').trim();
+      afterDiv.className = 'w-full text-[12px] text-g-500 mt-2 p-2 border border-g-200 rounded-lg resize-none outline-none';
+      afterDiv.rows = 2;
+      editor.appendChild(afterDiv);
+    }
+    contentEl.style.display = 'none';
+    contentEl.parentElement.insertBefore(editor, contentEl.nextSibling);
+    actions._tableEditor = editor;
+    actions._beforeTable = beforeTable.join('\n').trim();
+    actions._editMode = 'table';
   } else {
-    // Текстовое редактирование — textarea с markdown
+    // Обычный текст — textarea
     const ta = document.createElement('textarea');
-    ta.value = actions._text || contentEl.innerText;
+    ta.value = rawText;
     ta.className = 'w-full text-[13px] text-g-700 leading-relaxed p-3 rounded-xl border-2 border-zoom focus:outline-none resize-y font-mono';
     ta.style.minHeight = '120px';
     ta.style.maxHeight = '400px';
@@ -392,13 +451,11 @@ function editThis(btn) {
     actions._textarea = ta;
     actions._editMode = 'text';
     ta.focus();
-
     ta.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') { cancelEditByActions(actions); }
     });
   }
 
-  // Заменяем кнопки на Сохранить / Отмена
   const btnClass = 'flex items-center gap-1.5 text-[11px] transition px-2 py-1 rounded-lg';
   actions.innerHTML =
     '<button class="' + btnClass + ' text-white bg-zoom hover:bg-zoom/90" onclick="saveEdit(this)"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Сохранить</button>' +
@@ -416,8 +473,13 @@ async function saveEdit(btn) {
 
   const ta = actions._textarea;
   let newText;
-  if (actions._editMode === 'visual') {
-    newText = htmlToMarkdown(contentEl);
+  if (actions._editMode === 'table') {
+    const editor = actions._tableEditor;
+    const tableMd = tableEditorToMarkdown(editor);
+    const before = actions._beforeTable || '';
+    const afterTa = editor.querySelector('textarea');
+    const after = afterTa ? afterTa.value.trim() : '';
+    newText = [before, tableMd, after].filter(Boolean).join('\n\n');
   } else {
     newText = (ta ? ta.value : contentEl.innerText).trim();
   }
@@ -454,13 +516,13 @@ async function saveEdit(btn) {
   }
 
   // Убираем режим редактирования
-  if (actions._editMode === 'visual') {
-    contentEl.contentEditable = 'false';
-    contentEl.classList.remove('ring-2', 'ring-zoom', 'rounded-xl', 'p-2', 'outline-none');
+  if (actions._editMode === 'table') {
+    if (actions._tableEditor) actions._tableEditor.remove();
+    actions._tableEditor = null;
   } else {
     if (ta && ta.parentElement) ta.remove();
-    contentEl.style.display = '';
   }
+  contentEl.style.display = '';
 
   // Рендерим markdown
   contentEl.innerHTML = renderMd(newText);
@@ -533,16 +595,15 @@ function cancelEditByActions(actions) {
   const contentEl = actions._contentEl;
   if (!contentEl) return;
 
-  if (actions._editMode === 'visual') {
-    contentEl.contentEditable = 'false';
-    contentEl.classList.remove('ring-2', 'ring-zoom', 'rounded-xl', 'p-2', 'outline-none');
+  if (actions._editMode === 'table') {
+    if (actions._tableEditor) actions._tableEditor.remove();
+    actions._tableEditor = null;
   } else {
     const ta = actions._textarea;
     if (ta && ta.parentElement) ta.remove();
     actions._textarea = null;
-    contentEl.style.display = '';
   }
-
+  contentEl.style.display = '';
   contentEl.innerHTML = actions._origHtml || '';
 
   actions._text = actions._origText || '';
