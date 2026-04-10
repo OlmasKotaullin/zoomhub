@@ -312,18 +312,25 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
 
         logger.info(f"Telegram upload: meeting {meeting.id} from user {user.id} ({filename})")
 
-        # Run pipeline (transcribe + summarize)
-        from app.services.pipeline import process_meeting
-        await process_meeting(meeting.id)
-
-        # Send result back to Telegram
-        await _send_result(chat_id, meeting.id)
+        # Run pipeline in background (Bukvitsa takes 2-15 min)
+        asyncio.create_task(_run_pipeline_and_notify(chat_id, meeting.id))
 
     except Exception as e:
         logger.error(f"Telegram media handler error: {e}", exc_info=True)
         await _tg_send(chat_id, f"Ошибка обработки: {str(e)[:200]}")
     finally:
         db.close()
+
+
+async def _run_pipeline_and_notify(chat_id: str, meeting_id: int):
+    """Run pipeline in background, then send result to Telegram."""
+    try:
+        from app.services.pipeline import process_meeting
+        await process_meeting(meeting_id)
+        await _send_result(chat_id, meeting_id)
+    except Exception as e:
+        logger.error(f"Pipeline error for meeting {meeting_id}: {e}", exc_info=True)
+        await _tg_send(chat_id, f"Ошибка обработки: {str(e)[:200]}")
 
 
 async def _send_result(chat_id: str, meeting_id: int):
