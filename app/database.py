@@ -131,6 +131,13 @@ def init_db():
                 if "user_id" not in chat_cols:
                     migrations.append("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id)")
 
+            # Add 'telegram' to meetingsource enum if missing
+            try:
+                c.execute(text("ALTER TYPE meetingsource ADD VALUE IF NOT EXISTS 'telegram'"))
+                c.commit()
+            except Exception:
+                pass  # already exists or not an enum-based column
+
             for sql in migrations:
                 c.execute(text(sql))
             if migrations:
