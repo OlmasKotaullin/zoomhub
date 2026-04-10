@@ -8,8 +8,10 @@
 """
 
 import asyncio
+import io
 import json
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -48,6 +50,34 @@ async def _tg_send(chat_id: str, text: str, parse_mode: str = "Markdown",
     if reply_markup:
         payload["reply_markup"] = reply_markup
     return await _tg_api("sendMessage", **payload)
+
+
+async def _tg_edit(chat_id: str, message_id: int, text: str,
+                   parse_mode: str = "Markdown", reply_markup: dict | None = None):
+    """Edit existing Telegram message."""
+    payload = {"chat_id": chat_id, "message_id": message_id,
+               "text": text, "parse_mode": parse_mode}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    return await _tg_api("editMessageText", **payload)
+
+
+async def _tg_send_document(chat_id: str, buf: io.BytesIO, filename: str,
+                            caption: str = ""):
+    """Send document to Telegram chat."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
+    data = {"chat_id": chat_id}
+    if caption:
+        data["caption"] = caption
+        data["parse_mode"] = "Markdown"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(url, data=data,
+                                 files={"document": (filename, buf, "text/plain")})
+        return resp.json()
+
+
+# Callback data pattern: action:meeting_id[:extra]
+CALLBACK_PATTERN = re.compile(r"^(\w+):(\d+)(?::(.+))?$")
 
 
 async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0,
@@ -231,6 +261,13 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     body = await request.json()
+
+    # Handle callback_query (inline button presses)
+    callback = body.get("callback_query")
+    if callback:
+        asyncio.create_task(_handle_callback(callback))
+        return {"ok": True}
+
     message = body.get("message", {})
 
     if not message:
@@ -367,12 +404,17 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
             )
             return
 
-        # Acknowledge receipt
+        # Progress message (will be updated via editMessage)
         size_mb = file_size / (1024 * 1024) if file_size else 0
-        msg = "Принял! Обрабатываю..."
-        if size_mb > 20:
-            msg = f"Принял ({size_mb:.0f} МБ)! Скачиваю и обрабатываю — это может занять несколько минут..."
-        await _tg_send(chat_id, msg)
+        size_info = f" ({size_mb:.0f} МБ)" if size_mb > 5 else ""
+        progress_text = (
+            f"⏳ Обрабатываю запись{size_info}...\n\n"
+            f"— Скачивание\n"
+            f"   Транскрипция\n"
+            f"   Конспект"
+        )
+        resp = await _tg_send(chat_id, progress_text)
+        progress_msg_id = resp.get("result", {}).get("message_id", 0)
 
         # Create meeting
         ext = Path(filename).suffix.lower() or ".ogg"
@@ -405,16 +447,26 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
             meeting.status = MeetingStatus.error
             meeting.error_message = "Не удалось скачать файл из Telegram"
             db.commit()
+            if progress_msg_id:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
             await _tg_send(chat_id, "Не удалось скачать файл. Попробуйте ещё раз или загрузите через сайт.")
             return
 
         meeting.audio_path = str(file_path)
         db.commit()
 
+        # Update progress: download done
+        if progress_msg_id:
+            await _tg_edit(chat_id, progress_msg_id,
+                           "⏳ Обрабатываю запись...\n\n"
+                           "✓ Скачано\n"
+                           "— Транскрипция...\n"
+                           "   Конспект")
+
         logger.info(f"Telegram upload: meeting {meeting.id} from user {user.id} ({filename})")
 
-        # Run pipeline in background (Bukvitsa takes 2-15 min)
-        asyncio.create_task(_run_pipeline_and_notify(chat_id, meeting.id))
+        # Run pipeline in background
+        asyncio.create_task(_run_pipeline_and_notify(chat_id, meeting.id, progress_msg_id))
 
     except Exception as e:
         logger.error(f"Telegram media handler error: {e}", exc_info=True)
@@ -423,18 +475,29 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
         db.close()
 
 
-async def _run_pipeline_and_notify(chat_id: str, meeting_id: int):
+async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
     """Run pipeline in background, then send result to Telegram."""
     try:
         from app.services.pipeline import process_meeting
         await process_meeting(meeting_id)
-        await _send_result(chat_id, meeting_id)
+
+        # Update progress: transcription done, generating summary
+        if progress_msg_id:
+            await _tg_edit(chat_id, progress_msg_id,
+                           "⏳ Обрабатываю запись...\n\n"
+                           "✓ Скачано\n"
+                           "✓ Транскрипт готов\n"
+                           "— Генерирую конспект...")
+
+        await _send_result(chat_id, meeting_id, progress_msg_id)
     except Exception as e:
         logger.error(f"Pipeline error for meeting {meeting_id}: {e}", exc_info=True)
+        if progress_msg_id:
+            await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
         await _tg_send(chat_id, f"Ошибка обработки: {str(e)[:200]}")
 
 
-async def _send_result(chat_id: str, meeting_id: int):
+async def _send_result(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
     """Send formatted transcription result back to Telegram."""
     db = SessionLocal()
     try:
@@ -442,63 +505,193 @@ async def _send_result(chat_id: str, meeting_id: int):
         if not meeting:
             return
 
+        # Delete progress message
+        if progress_msg_id:
+            await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+
         if meeting.status == MeetingStatus.error:
             await _tg_send(chat_id, f"Ошибка: {meeting.error_message or 'Неизвестная ошибка'}")
             return
 
-        # Build result message
-        parts = [f"*{meeting.title}*\n"]
+        parts = ["✅ *Встреча обработана*\n"]
+        parts.append(f"*{meeting.title}*")
 
-        # Summary
-        if meeting.summary:
-            s = meeting.summary
-            if s.tldr:
-                parts.append(f"{s.tldr}\n")
-
-            # Tasks
-            if s.tasks:
-                parts.append("*Задачи:*")
-                for t in s.tasks[:7]:
-                    task_text = t.get("task", "") if isinstance(t, dict) else str(t)
-                    assignee = t.get("assignee", "") if isinstance(t, dict) else ""
-                    line = f"  • {task_text}"
-                    if assignee:
-                        line += f" — {assignee}"
-                    parts.append(line)
-                parts.append("")
-
-            # Topics
-            if s.topics:
-                topics_text = ", ".join(
-                    t.get("topic", "") if isinstance(t, dict) else str(t)
-                    for t in s.topics[:5]
-                )
-                if topics_text:
-                    parts.append(f"*Темы:* {topics_text}\n")
-
-        # Transcript snippet
+        # Metrics line
+        meta = []
+        if meeting.duration_seconds:
+            meta.append(f"⏱ {meeting.duration_seconds // 60} мин")
         if meeting.transcript and meeting.transcript.full_text:
-            text = meeting.transcript.full_text
-            if len(text) > 500:
-                text = text[:500] + "..."
-            parts.append(f"_Транскрипт ({len(meeting.transcript.full_text)} символов):_")
-            parts.append(f"```\n{text}\n```")
+            chars = len(meeting.transcript.full_text)
+            meta.append(f"{chars:,} символов".replace(",", " "))
+        if meeting.summary and meeting.summary.tasks:
+            meta.append(f"{len(meeting.summary.tasks)} задач")
+        if meta:
+            parts.append(" | ".join(meta))
+
+        # TLDR
+        if meeting.summary and meeting.summary.tldr:
+            parts.append(f"\n{meeting.summary.tldr}")
+
+        # Tasks
+        if meeting.summary and meeting.summary.tasks:
+            parts.append("\n*Задачи:*")
+            for t in meeting.summary.tasks[:5]:
+                task_text = t.get("task", "") if isinstance(t, dict) else str(t)
+                assignee = t.get("assignee", "") if isinstance(t, dict) else ""
+                line = f"  • {task_text}"
+                if assignee:
+                    line += f" — {assignee}"
+                parts.append(line)
+            if len(meeting.summary.tasks) > 5:
+                parts.append(f"  _...и ещё {len(meeting.summary.tasks) - 5}_")
+
+        # Topics
+        if meeting.summary and meeting.summary.topics:
+            topics_text = ", ".join(
+                t.get("topic", "") if isinstance(t, dict) else str(t)
+                for t in meeting.summary.topics[:5]
+            )
+            if topics_text:
+                parts.append(f"\n*Темы:* {topics_text}")
+
+        # Branding
+        parts.append("\n──────────────")
+        parts.append("Создано в *ZoomHub*")
 
         message = "\n".join(parts)
 
-        # Truncate if too long for Telegram (4096 chars)
-        if len(message) > 4000:
-            message = message[:3950] + "\n\n_...полный текст на сайте_"
+        if len(message) > 3800:
+            message = message[:3750] + "\n\n_...полный текст на сайте_"
 
-        # Send with inline button to website
-        await _tg_send(
-            chat_id,
-            message,
-            reply_markup={"inline_keyboard": [[{
-                "text": "Открыть на сайте",
-                "url": f"{APP_URL}/meetings/{meeting_id}"
-            }]]}
-        )
+        # Inline buttons: 2 rows
+        mid = meeting.id
+        keyboard = {"inline_keyboard": [
+            [
+                {"text": "📄 Транскрипт .txt", "callback_data": f"dl:{mid}:txt"},
+                {"text": "💬 AI-чат", "url": f"{APP_URL}/meetings/{mid}#chat"},
+            ],
+            [
+                {"text": "🌐 Открыть на сайте", "url": f"{APP_URL}/meetings/{mid}"},
+            ],
+        ]}
+
+        await _tg_send(chat_id, message, reply_markup=keyboard)
 
     finally:
         db.close()
+
+
+# ──────────────── Callback query handler ────────────────
+
+async def _handle_callback(callback: dict):
+    """Route inline button presses."""
+    cb_id = callback["id"]
+    chat_id = str(callback["message"]["chat"]["id"])
+    data = callback.get("data", "")
+
+    # Acknowledge immediately (removes loading spinner)
+    await _tg_api("answerCallbackQuery", callback_query_id=cb_id)
+
+    match = CALLBACK_PATTERN.match(data)
+    if not match:
+        return
+
+    action, meeting_id, extra = match.group(1), int(match.group(2)), match.group(3)
+
+    db = SessionLocal()
+    try:
+        # Verify user owns this meeting
+        user = _find_user_by_chat_id(chat_id, db)
+        if not user:
+            await _tg_send(chat_id, "Аккаунт не подключён.")
+            return
+
+        meeting = db.query(Meeting).filter(
+            Meeting.id == meeting_id,
+            Meeting.user_id == user.id
+        ).first()
+        if not meeting:
+            await _tg_send(chat_id, "Встреча не найдена.")
+            return
+
+        if action == "dl":
+            await _handle_download(chat_id, meeting, extra)
+    finally:
+        db.close()
+
+
+# ──────────────── File generation ────────────────
+
+def _generate_transcript_txt(meeting: Meeting) -> io.BytesIO:
+    """Generate .txt file with timestamps — our advantage over Bukvitsa."""
+    lines = []
+    lines.append(f"ZoomHub — Транскрипт встречи")
+    lines.append(f"{'=' * 50}")
+    lines.append(f"Название: {meeting.title}")
+    if meeting.date:
+        lines.append(f"Дата: {meeting.date.strftime('%d.%m.%Y %H:%M')}")
+    if meeting.duration_seconds:
+        lines.append(f"Длительность: {meeting.duration_seconds // 60} мин")
+    lines.append("")
+
+    # AI summary
+    if meeting.summary and meeting.summary.tldr:
+        lines.append("--- КОНСПЕКТ ---")
+        lines.append(meeting.summary.tldr)
+        lines.append("")
+        if meeting.summary.tasks:
+            lines.append("ЗАДАЧИ:")
+            for t in meeting.summary.tasks:
+                task = t.get("task", "") if isinstance(t, dict) else str(t)
+                assignee = t.get("assignee", "") if isinstance(t, dict) else ""
+                line = f"  [ ] {task}"
+                if assignee:
+                    line += f" — {assignee}"
+                lines.append(line)
+            lines.append("")
+
+    # Transcript with timestamps
+    lines.append("--- ТРАНСКРИПТ ---")
+    lines.append("")
+
+    if meeting.transcript and meeting.transcript.segments:
+        for seg in meeting.transcript.segments:
+            start = seg.get("start", 0)
+            h, remainder = divmod(int(start), 3600)
+            m, s = divmod(remainder, 60)
+            tc = f"[{h:02d}:{m:02d}:{s:02d}]"
+            text = seg.get("text", "")
+            speaker = seg.get("speaker", "")
+            prefix = f"{tc} {speaker}: " if speaker else f"{tc} "
+            lines.append(f"{prefix}{text}")
+    elif meeting.transcript and meeting.transcript.full_text:
+        lines.append(meeting.transcript.full_text)
+
+    lines.append("")
+    lines.append("=" * 50)
+    lines.append("Транскрибировано в ZoomHub — zoomhub.ru")
+
+    buf = io.BytesIO()
+    buf.write("\n".join(lines).encode("utf-8"))
+    buf.seek(0)
+    return buf
+
+
+async def _handle_download(chat_id: str, meeting: Meeting, fmt: str | None):
+    """Send transcript file to Telegram."""
+    if fmt != "txt":
+        await _tg_send(chat_id, "Неизвестный формат.")
+        return
+
+    if not meeting.transcript:
+        await _tg_send(chat_id, "Транскрипт пуст.")
+        return
+
+    buf = _generate_transcript_txt(meeting)
+    filename = f"{meeting.title[:40]}.txt"
+    chars = len(meeting.transcript.full_text) if meeting.transcript.full_text else 0
+
+    await _tg_send_document(
+        chat_id, buf, filename,
+        caption=f"📄 Транскрипт с таймкодами ({chars:,} символов)\n\nСоздано в *ZoomHub*".replace(",", " ")
+    )
