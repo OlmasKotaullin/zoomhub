@@ -18,7 +18,7 @@ logger = logging.getLogger("whisper-worker")
 # Load model once at cold start
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
 DEVICE = os.environ.get("WHISPER_DEVICE", "cuda")
-COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE", "float16")
+COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE", "int8_float16")
 
 logger.info(f"Loading faster-whisper {MODEL_SIZE} on {DEVICE} ({COMPUTE_TYPE})...")
 model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
