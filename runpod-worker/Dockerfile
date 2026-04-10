@@ -15,10 +15,7 @@ RUN pip3 install --no-cache-dir \
     runpod==1.7.7 \
     httpx==0.28.1
 
-# Pre-download the model at build time (baked into image = no cold start download)
-RUN python3 -c "from faster_whisper import WhisperModel; WhisperModel('large-v3', device='cpu', compute_type='int8')" \
-    && echo "Model downloaded"
-
+# Model downloads at first run (~3GB) — RunPod caches between invocations
 COPY handler.py /app/handler.py
 
 CMD ["python3", "-u", "/app/handler.py"]
