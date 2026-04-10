@@ -12,6 +12,11 @@ from app.deps import templates
 from app.models import User, InviteCode
 from app.oauth import oauth, get_available_providers
 
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter(tags=["auth"])
 
 
@@ -49,6 +54,7 @@ async def login_page(request: Request):
 
 
 @router.post("/login", response_class=HTMLResponse)
+@limiter.limit("10/minute")
 async def login(
     request: Request,
     email: str = Form(...),
@@ -79,6 +85,7 @@ async def register_page(request: Request):
 
 
 @router.post("/register", response_class=HTMLResponse)
+@limiter.limit("5/minute")
 async def register(
     request: Request,
     name: str = Form(...),
@@ -213,6 +220,7 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
 # ---- JSON API routes ----
 
 @router.post("/api/auth/login")
+@limiter.limit("10/minute")
 async def api_login(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
     email = body.get("email", "")
@@ -226,21 +234,43 @@ async def api_login(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/api/auth/register")
+@limiter.limit("5/minute")
 async def api_register(request: Request, db: Session = Depends(get_db)):
+    from app.config import REQUIRE_INVITE_CODE
+
     body = await request.json()
     name = body.get("name", "")
     email = body.get("email", "")
     password = body.get("password", "")
+    invite_code = body.get("invite_code", "")
 
     if not name or not email or len(password) < 6:
         return JSONResponse({"error": "Заполните все поля (пароль мин. 6 символов)"}, status_code=400)
+
+    # Validate invite code (same logic as HTML registration)
+    invite = None
+    if REQUIRE_INVITE_CODE:
+        if not invite_code.strip():
+            return JSONResponse({"error": "Требуется инвайт-код"}, status_code=403)
+        invite = db.query(InviteCode).filter(
+            InviteCode.code == invite_code.strip(),
+            InviteCode.is_active == True,
+        ).first()
+        if not invite or invite.used_count >= invite.max_uses:
+            return JSONResponse({"error": "Неверный или использованный инвайт-код"}, status_code=403)
 
     existing = db.query(User).filter(User.email == email).first()
     if existing:
         return JSONResponse({"error": "Пользователь уже существует"}, status_code=409)
 
     user = User(name=name, email=email, hashed_password=hash_password(password))
+    if invite:
+        user.invite_code_id = invite.id
+        invite.used_count += 1
     db.add(user)
+    db.flush()
+    if invite:
+        invite.used_by_id = user.id
     db.commit()
     db.refresh(user)
 
@@ -265,50 +295,4 @@ async def get_agent_token(request: Request, db: Session = Depends(get_db)):
     return {"token": user.agent_api_token}
 
 
-# ---- Telegram Bot Webhook ----
-
-@router.post("/api/telegram/webhook")
-async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
-    """Handle Telegram bot updates (e.g., /start command to link account)."""
-    import httpx
-    from app.config import TELEGRAM_BOT_TOKEN
-    from app.auth import decode_token
-
-    body = await request.json()
-    message = body.get("message", {})
-    text = message.get("text", "")
-    chat_id = str(message.get("chat", {}).get("id", ""))
-
-    if not chat_id:
-        return {"ok": True}
-
-    if text.startswith("/start"):
-        # /start <token> — link Telegram to ZoomHub account
-        parts = text.split(maxsplit=1)
-        token = parts[1] if len(parts) > 1 else ""
-
-        reply = ""
-        if token:
-            user_id = decode_token(token)
-            if user_id:
-                user = db.query(User).filter(User.id == user_id).first()
-                if user:
-                    user.telegram_chat_id = chat_id
-                    user.notify_telegram = True
-                    db.commit()
-                    reply = f"Привет, {user.name}! Telegram подключён к ZoomHub. Вы будете получать уведомления о новых встречах."
-                else:
-                    reply = "Пользователь не найден. Попробуйте получить новую ссылку в настройках ZoomHub."
-            else:
-                reply = "Ссылка устарела. Получите новую в настройках ZoomHub."
-        else:
-            reply = "Для подключения уведомлений перейдите по ссылке из настроек ZoomHub."
-
-        if TELEGRAM_BOT_TOKEN and reply:
-            async with httpx.AsyncClient() as client:
-                await client.post(
-                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                    json={"chat_id": chat_id, "text": reply},
-                )
-
-    return {"ok": True}
+# Telegram Bot Webhook moved to app/routers/telegram_bot.py

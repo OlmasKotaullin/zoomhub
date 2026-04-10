@@ -25,12 +25,17 @@ async def notify_user(meeting_id: int):
         tasks_text = ""
         if summary.tasks:
             tasks_lines = [f"  • {t.get('task', '')}" + (f" — {t.get('assignee', '')}" if t.get('assignee') else "") for t in summary.tasks[:5]]
-            tasks_text = "\n\nЗадачи:\n" + "\n".join(tasks_lines)
+            tasks_text = "\n\n*Задачи:*\n" + "\n".join(tasks_lines)
 
-        message = f"Встреча обработана: \"{meeting.title}\"\n\n{summary.tldr}{tasks_text}"
+        message = f"*Встреча обработана:* \"{meeting.title}\"\n\n{summary.tldr}{tasks_text}"
 
         if user.notify_telegram and user.telegram_chat_id:
-            await _send_telegram(user.telegram_chat_id, message)
+            from app.config import APP_URL
+            reply_markup = {"inline_keyboard": [[{
+                "text": "Открыть на сайте",
+                "url": f"{APP_URL}/meetings/{meeting.id}"
+            }]]}
+            await _send_telegram(user.telegram_chat_id, message, reply_markup=reply_markup)
 
         if user.notify_email:
             await _send_email(user.email, meeting.title, message)
@@ -39,7 +44,7 @@ async def notify_user(meeting_id: int):
     finally:
         db.close()
 
-async def _send_telegram(chat_id: str, message: str):
+async def _send_telegram(chat_id: str, message: str, reply_markup: dict | None = None):
     """Send message via Telegram Bot API."""
     import httpx
     from app.config import TELEGRAM_BOT_TOKEN
@@ -50,11 +55,15 @@ async def _send_telegram(chat_id: str, message: str):
 
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown",
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         async with httpx.AsyncClient() as client:
-            await client.post(url, json={
-                "chat_id": chat_id,
-                "text": message,
-            })
+            await client.post(url, json=payload)
         logger.info(f"Telegram notification sent to {chat_id}")
     except Exception as e:
         logger.error(f"Telegram send error: {e}")

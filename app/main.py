@@ -105,6 +105,15 @@ async def _resume_stuck_meetings():
 app = FastAPI(title="ZoomHub", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
@@ -164,8 +173,9 @@ async def health_check():
 static_dir = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-from app.routers import auth, folders, meetings, chat, zoom, native_api, admin  # noqa: E402
+from app.routers import auth, folders, meetings, chat, zoom, native_api, admin, telegram_bot  # noqa: E402
 
+app.include_router(telegram_bot.router)  # before auth — handles /api/telegram/webhook
 app.include_router(auth.router)
 app.include_router(folders.router)
 app.include_router(meetings.router)

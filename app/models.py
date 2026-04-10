@@ -14,12 +14,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+from app.crypto import EncryptedText, EncryptedString
+
 from app.database import Base
 
 
 class MeetingSource(str, enum.Enum):
     zoom = "zoom"
     upload = "upload"
+    telegram = "telegram"
 
 
 class MeetingStatus(str, enum.Enum):
@@ -67,9 +70,9 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utcnow)
 
-    # Zoom OAuth (per-user)
-    zoom_access_token = Column(Text, nullable=True)
-    zoom_refresh_token = Column(Text, nullable=True)
+    # Zoom OAuth (per-user) — encrypted at rest
+    zoom_access_token = Column(EncryptedText, nullable=True)
+    zoom_refresh_token = Column(EncryptedText, nullable=True)
     zoom_token_expires_at = Column(DateTime, nullable=True)
     zoom_user_email = Column(String(255), nullable=True)
     # Notifications
@@ -79,13 +82,13 @@ class User(Base):
     # Capture settings
     capture_source = Column(String(20), default="both")  # cloud | agent | both
     agent_api_token = Column(String(500), nullable=True)
-    # User API keys (per-user, override global .env)
-    user_groq_api_key = Column(String(500), nullable=True)
-    user_gemini_api_key = Column(String(500), nullable=True)
-    user_anthropic_api_key = Column(String(500), nullable=True)
-    user_openai_api_key = Column(String(500), nullable=True)
-    user_deepseek_api_key = Column(String(500), nullable=True)
-    user_openrouter_api_key = Column(String(500), nullable=True)
+    # User API keys (per-user, override global .env) — encrypted at rest
+    user_groq_api_key = Column(EncryptedString, nullable=True)
+    user_gemini_api_key = Column(EncryptedString, nullable=True)
+    user_anthropic_api_key = Column(EncryptedString, nullable=True)
+    user_openai_api_key = Column(EncryptedString, nullable=True)
+    user_deepseek_api_key = Column(EncryptedString, nullable=True)
+    user_openrouter_api_key = Column(EncryptedString, nullable=True)
     # Claude Panel customization
     claude_system_prompt = Column(Text, nullable=True)
     claude_memories = Column(JSON, default=list)
@@ -94,9 +97,9 @@ class User(Base):
     claude_bridge_token = Column(String(500), nullable=True)
     # Per-user Telegram (Буквица транскрипция)
     tg_api_id = Column(Integer, nullable=True)
-    tg_api_hash = Column(String(255), nullable=True)
+    tg_api_hash = Column(EncryptedString, nullable=True)
     tg_bot_username = Column(String(100), nullable=True)
-    tg_session = Column(Text, nullable=True)  # Telethon StringSession
+    tg_session = Column(EncryptedText, nullable=True)  # Telethon StringSession
     # Onboarding
     onboarding_completed = Column(Boolean, default=False)
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)

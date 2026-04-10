@@ -140,6 +140,9 @@ def get_transcription_provider() -> TranscriptionProvider:
     elif TRANSCRIPTION_PROVIDER == "openai_whisper":
         from app.services.providers.openai_whisper_provider import OpenAIWhisperProvider
         _transcription_instance = OpenAIWhisperProvider()
+    elif TRANSCRIPTION_PROVIDER == "runpod_whisper":
+        from app.services.providers.runpod_provider import RunPodWhisperProvider
+        _transcription_instance = RunPodWhisperProvider()
     else:
         raise ValueError(f"Неизвестный транскрипция провайдер: {TRANSCRIPTION_PROVIDER}")
 

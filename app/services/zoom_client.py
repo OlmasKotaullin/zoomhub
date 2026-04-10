@@ -91,9 +91,9 @@ async def get_recent_recordings(from_date: str = "") -> list[dict]:
     return meetings
 
 
-async def download_recording(meeting_id: int, download_url: str) -> Path:
+async def download_recording(meeting_id: int, download_url: str, access_token: str | None = None) -> Path:
     """Скачивает запись Zoom по URL с авторизацией."""
-    token = await get_access_token()
+    token = access_token or await get_access_token()
 
     meeting_dir = RECORDINGS_DIR / str(meeting_id)
     meeting_dir.mkdir(parents=True, exist_ok=True)

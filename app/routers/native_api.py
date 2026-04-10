@@ -14,7 +14,7 @@ from sqlalchemy import or_
 from app.database import get_db
 from app.models import Meeting, MeetingStatus, MeetingSource, Transcript, Summary, Folder, ChatMessage, ChatRole
 from app.config import RECORDINGS_DIR, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
-from app.deps import get_current_user_optional
+from app.deps import get_current_user_optional, get_current_user, get_user_meeting, get_user_folder
 from app.services.pipeline import process_meeting
 import app.config as config_module
 
@@ -83,13 +83,15 @@ def _chat_dict(msg: ChatMessage) -> dict:
 
 @router.get("/meetings")
 async def list_meetings(
+    request: Request,
     q: str = Query("", description="Поиск"),
     status: str = Query("", description="Фильтр по статусу"),
     offset: int = Query(0, ge=0, description="Смещение"),
     limit: int = Query(50, ge=1, le=200, description="Количество"),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Meeting)
+    user = get_current_user(request, db)
+    query = db.query(Meeting).filter(Meeting.user_id == user.id)
 
     if q and q.strip():
         pattern = f"%{q}%"
@@ -113,10 +115,9 @@ async def list_meetings(
 
 
 @router.get("/meetings/{meeting_id}/detail")
-async def meeting_detail(meeting_id: int, db: Session = Depends(get_db)):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+async def meeting_detail(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    meeting = get_user_meeting(meeting_id, user, db)
 
     return {
         "meeting": _meeting_dict(meeting),
@@ -126,8 +127,9 @@ async def meeting_detail(meeting_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/meetings/{meeting_id}/progress")
-async def meeting_progress(meeting_id: int, db: Session = Depends(get_db)):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+async def meeting_progress(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id, Meeting.user_id == user.id).first()
     if not meeting:
         return {"status": "error", "progress": 0, "message": "Не найдена"}
 
@@ -144,11 +146,13 @@ async def meeting_progress(meeting_id: int, db: Session = Depends(get_db)):
 
 @router.post("/meetings/upload")
 async def upload_meeting(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(""),
     folder_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    user = get_current_user(request, db)
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=422, detail=f"Формат {ext} не поддерживается")
@@ -162,6 +166,7 @@ async def upload_meeting(
     if zoom_match:
         zoom_id = zoom_match.group(1)
         existing = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
             Meeting.title.contains(zoom_id),
             Meeting.status != MeetingStatus.error,
         ).first()
@@ -171,6 +176,7 @@ async def upload_meeting(
     folder_id_int = int(folder_id) if folder_id and folder_id.isdigit() else None
 
     meeting = Meeting(
+        user_id=user.id,
         title=title,
         folder_id=folder_id_int,
         source=MeetingSource.upload,
@@ -202,13 +208,13 @@ async def upload_meeting(
 @router.patch("/meetings/{meeting_id}")
 async def update_meeting(
     meeting_id: int,
+    request: Request,
     title: str = Form(None),
     folder_id: str = Form(None),
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user(request, db)
+    meeting = get_user_meeting(meeting_id, user, db)
     if title is not None:
         meeting.title = title
     if folder_id is not None:
@@ -219,10 +225,9 @@ async def update_meeting(
 
 
 @router.delete("/meetings/{meeting_id}")
-async def delete_meeting(meeting_id: int, db: Session = Depends(get_db)):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+async def delete_meeting(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    meeting = get_user_meeting(meeting_id, user, db)
 
     if meeting.audio_path:
         meeting_dir = Path(meeting.audio_path).parent
@@ -235,10 +240,9 @@ async def delete_meeting(meeting_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/meetings/{meeting_id}/retry")
-async def retry_meeting(meeting_id: int, db: Session = Depends(get_db)):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+async def retry_meeting(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    meeting = get_user_meeting(meeting_id, user, db)
     if not meeting.audio_path:
         raise HTTPException(status_code=422, detail="Нет аудиофайла")
 
@@ -253,10 +257,9 @@ async def retry_meeting(meeting_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/meetings/{meeting_id}/resummarize")
-async def resummarize_meeting(meeting_id: int, db: Session = Depends(get_db)):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+async def resummarize_meeting(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    meeting = get_user_meeting(meeting_id, user, db)
     if not meeting.transcript:
         raise HTTPException(status_code=422, detail="Нет транскрипта")
 
@@ -272,7 +275,9 @@ async def resummarize_meeting(meeting_id: int, db: Session = Depends(get_db)):
 # ──────────────── Chat ────────────────
 
 @router.get("/meetings/{meeting_id}/chat/history")
-async def chat_history(meeting_id: int, db: Session = Depends(get_db)):
+async def chat_history(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    get_user_meeting(meeting_id, user, db)  # ownership check
     messages = (
         db.query(ChatMessage)
         .filter(ChatMessage.meeting_id == meeting_id)
@@ -285,12 +290,12 @@ async def chat_history(meeting_id: int, db: Session = Depends(get_db)):
 @router.post("/meetings/{meeting_id}/chat")
 async def chat_meeting(
     meeting_id: int,
+    request: Request,
     message: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
-    if not meeting:
-        raise HTTPException(status_code=404, detail="Встреча не найдена")
+    user = get_current_user(request, db)
+    meeting = get_user_meeting(meeting_id, user, db)
 
     user_msg = ChatMessage(
         meeting_id=meeting_id,
@@ -322,7 +327,9 @@ async def chat_meeting(
 
 
 @router.delete("/meetings/{meeting_id}/chat")
-async def clear_chat(meeting_id: int, db: Session = Depends(get_db)):
+async def clear_chat(meeting_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    get_user_meeting(meeting_id, user, db)  # ownership check
     db.query(ChatMessage).filter(ChatMessage.meeting_id == meeting_id).delete()
     db.commit()
     return {"status": "ok"}
@@ -331,23 +338,26 @@ async def clear_chat(meeting_id: int, db: Session = Depends(get_db)):
 # ──────────────── Folders ────────────────
 
 @router.get("/folders")
-async def list_folders(db: Session = Depends(get_db)):
-    folders = db.query(Folder).order_by(Folder.created_at.desc()).all()
+async def list_folders(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    folders = db.query(Folder).filter(Folder.user_id == user.id).order_by(Folder.created_at.desc()).all()
     result = []
     for f in folders:
-        count = db.query(Meeting).filter(Meeting.folder_id == f.id).count()
+        count = db.query(Meeting).filter(Meeting.folder_id == f.id, Meeting.user_id == user.id).count()
         result.append(_folder_dict(f, count))
     return result
 
 
 @router.post("/folders")
 async def create_folder(
+    request: Request,
     name: str = Form(...),
     icon: str = Form("📁"),
     keywords: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    folder = Folder(name=name, icon=icon, keywords=keywords)
+    user = get_current_user(request, db)
+    folder = Folder(user_id=user.id, name=name, icon=icon, keywords=keywords)
     db.add(folder)
     db.commit()
     db.refresh(folder)
@@ -355,10 +365,9 @@ async def create_folder(
 
 
 @router.delete("/folders/{folder_id}")
-async def delete_folder(folder_id: int, db: Session = Depends(get_db)):
-    folder = db.query(Folder).filter(Folder.id == folder_id).first()
-    if not folder:
-        raise HTTPException(status_code=404, detail="Папка не найдена")
+async def delete_folder(folder_id: int, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    folder = get_user_folder(folder_id, user, db)
     db.delete(folder)
     db.commit()
     return {"status": "ok"}
@@ -378,7 +387,7 @@ async def switch_llm(provider: str = Form(...)):
 
 @router.post("/settings/transcription-provider")
 async def switch_transcription(provider: str = Form(...)):
-    if provider not in ("bukvitsa", "whisper"):
+    if provider not in ("bukvitsa", "whisper", "openai_whisper", "runpod_whisper"):
         raise HTTPException(status_code=400, detail="Неизвестный провайдер")
     config_module.TRANSCRIPTION_PROVIDER = provider
     from app.services.providers.registry import reset_transcription_provider

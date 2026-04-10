@@ -107,7 +107,7 @@ def _get_user_id(meeting_id: int) -> int | None:
         db.close()
 
 
-async def process_meeting(meeting_id: int, download_url: str | None = None):
+async def process_meeting(meeting_id: int, download_url: str | None = None, access_token: str | None = None):
     """Фоновая обработка записи: скачивание → транскрибация → конспект."""
     try:
         # Шаг 1: Скачивание (если Zoom)
@@ -115,7 +115,7 @@ async def process_meeting(meeting_id: int, download_url: str | None = None):
             try:
                 _update_status(meeting_id, MeetingStatus.downloading)
                 from app.services.zoom_client import download_recording
-                file_path = await download_recording(meeting_id, download_url)
+                file_path = await download_recording(meeting_id, download_url, access_token=access_token)
                 db = SessionLocal()
                 try:
                     m = db.query(Meeting).filter(Meeting.id == meeting_id).first()

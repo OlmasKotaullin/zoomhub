@@ -91,8 +91,7 @@ async def _poll_user(user, db):
         if not download_url:
             continue
 
-        # Add access token to download URL
-        download_url = f"{download_url}?access_token={access_token}"
+        # Token passed separately — never in URL (avoid leaking in logs/proxies)
 
         title = recording.get("topic", "Zoom Meeting")
         duration = recording.get("duration", 0) * 60  # min to sec
@@ -112,4 +111,4 @@ async def _poll_user(user, db):
         db.refresh(meeting)
 
         logger.info(f"New Zoom recording for user {user.id}: {title}")
-        asyncio.create_task(process_meeting(meeting.id, download_url))
+        asyncio.create_task(process_meeting(meeting.id, download_url, access_token=access_token))

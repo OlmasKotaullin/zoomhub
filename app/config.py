@@ -59,8 +59,21 @@ OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 AUTO_ROUTING_THRESHOLD = 10000  # символов — выше → Claude, ниже → Ollama
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
-TRANSCRIPTION_PROVIDER = os.environ.get("TRANSCRIPTION_PROVIDER", "bukvitsa")  # bukvitsa | whisper | openai_whisper
+TRANSCRIPTION_PROVIDER = os.environ.get("TRANSCRIPTION_PROVIDER", "bukvitsa")  # bukvitsa | whisper | openai_whisper | runpod_whisper
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
+
+# RunPod Serverless (faster-whisper)
+RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY", "")
+RUNPOD_ENDPOINT_ID = os.environ.get("RUNPOD_ENDPOINT_ID", "")
+
+# Cloudflare R2 (for large file transfer to RunPod)
+R2_ENDPOINT = os.environ.get("R2_ENDPOINT", "")
+R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY", "")
+R2_SECRET_KEY = os.environ.get("R2_SECRET_KEY", "")
+R2_BUCKET = os.environ.get("R2_BUCKET", "zoomhub")
+
+# App URL (for Telegram inline buttons)
+APP_URL = os.environ.get("APP_URL", "https://zoomhub.ru")
 
 ALLOWED_EXTENSIONS = {".mp4", ".mp3", ".wav", ".m4a", ".webm", ".ogg"}
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
