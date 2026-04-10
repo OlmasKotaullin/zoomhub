@@ -95,8 +95,7 @@ async def _tg_download_via_telethon(file_id: str, dest_path: str, file_size: int
                                      message_id: int = 0, chat_id: str = "") -> bool:
     """Download large file via Telethon Bot Client (up to 2 GB).
 
-    Creates a Telethon client using the BOT TOKEN (not userbot).
-    Bot can access its own messages — no need for userbot session.
+    Uses InputPeerUser + get_messages to fetch the message, then download_media.
     """
     try:
         size_mb = file_size / (1024 * 1024)
@@ -111,25 +110,33 @@ async def _tg_download_via_telethon(file_id: str, dest_path: str, file_size: int
             logger.error("Could not create Telethon bot client")
             return False
 
-        # Get the message from the chat via bot's own session
-        peer = int(chat_id)
-        messages = await bot_client.get_messages(peer, ids=[message_id])
-        if not messages or not messages[0]:
-            logger.error(f"Message {message_id} not found in chat {chat_id}")
+        # For bots, we need to use InputPeerUser with the user's access_hash
+        # get_input_entity resolves chat_id to proper InputPeer
+        try:
+            peer = await bot_client.get_input_entity(int(chat_id))
+        except Exception as e:
+            logger.warning(f"get_input_entity failed: {e}, trying raw int")
+            peer = int(chat_id)
+
+        messages = await bot_client.get_messages(peer, ids=message_id)
+        if not messages:
+            logger.error(f"Message {message_id} not found for peer {chat_id}")
             return False
 
-        msg = messages[0]
-        if not msg.media:
+        msg = messages if not isinstance(messages, list) else messages[0] if messages else None
+        if not msg or not msg.media:
             logger.error(f"Message {message_id} has no media")
             return False
 
         # Download media via Telethon MTProto (supports up to 2 GB)
+        logger.info(f"Starting Telethon download of {size_mb:.1f} MB...")
         downloaded = await bot_client.download_media(msg, file=dest_path)
-        if downloaded and Path(downloaded).exists():
-            actual_size = Path(downloaded).stat().st_size / (1024 * 1024)
+        if downloaded and Path(str(downloaded)).exists():
+            actual_size = Path(str(downloaded)).stat().st_size / (1024 * 1024)
             logger.info(f"Downloaded {actual_size:.1f} MB via Telethon Bot -> {downloaded}")
             if str(downloaded) != dest_path:
-                Path(downloaded).rename(dest_path)
+                import shutil
+                shutil.move(str(downloaded), dest_path)
             return True
 
         logger.error("Telethon bot download returned None")
