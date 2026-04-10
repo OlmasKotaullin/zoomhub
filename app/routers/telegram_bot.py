@@ -697,31 +697,67 @@ async def _handle_callback(callback: dict):
 
 # ──────────────── Voice question in chat mode ────────────────
 
+async def _transcribe_voice_groq(file_id: str) -> str | None:
+    """Download voice from Telegram and transcribe via Groq Whisper API.
+
+    Fast path for short voice questions: ~1-3 sec vs RunPod cold-start 30-60 sec.
+    Downloads file to memory (no disk I/O), sends directly to Groq.
+    Returns transcribed text or None on failure.
+    """
+    from app.config import GROQ_API_KEY
+    if not GROQ_API_KEY:
+        return None
+
+    # Get Telegram file download URL
+    result = await _tg_api("getFile", file_id=file_id)
+    tg_file_path = result.get("result", {}).get("file_path")
+    if not tg_file_path:
+        logger.error(f"Groq fast path: getFile failed: {result}")
+        return None
+
+    download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{tg_file_path}"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Download to memory
+        resp = await client.get(download_url)
+        resp.raise_for_status()
+        audio_bytes = resp.content
+
+    # Send to Groq Whisper API
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            files={"file": ("voice.ogg", audio_bytes, "audio/ogg")},
+            data={"model": "whisper-large-v3", "language": "ru", "response_format": "text"},
+        )
+        resp.raise_for_status()
+        text = resp.text.strip()
+
+    logger.info(f"Groq Whisper transcribed {len(audio_bytes)} bytes → {len(text)} chars")
+    return text or None
+
+
 async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, message_id: int):
     """Transcribe voice message and send as AI chat question."""
-    import tempfile
-
     try:
         await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
 
-        # Download voice to temp file
-        tmp_dir = tempfile.mkdtemp()
-        voice_path = f"{tmp_dir}/voice.ogg"
+        # Fast path: Groq Whisper API (1-3 sec, in-memory, no disk I/O)
+        text = await _transcribe_voice_groq(file_id)
 
-        success = await _tg_download_file(file_id, voice_path, file_size=file_size,
-                                          message_id=message_id, chat_id=chat_id)
-        if not success:
-            await _tg_send(chat_id, "Не удалось скачать голосовое.")
-            return
-
-        # Quick transcribe via RunPod
-        from app.services.transcriber import transcribe_file
-        result = await transcribe_file(voice_path)
-        text = result.get("full_text", "").strip()
-
-        # Cleanup
-        import shutil
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if not text:
+            # Fallback: RunPod (slower but handles edge cases)
+            import tempfile, shutil
+            tmp_dir = tempfile.mkdtemp()
+            voice_path = f"{tmp_dir}/voice.ogg"
+            success = await _tg_download_file(file_id, voice_path, file_size=file_size,
+                                              message_id=message_id, chat_id=chat_id)
+            if success:
+                from app.services.transcriber import transcribe_file
+                result = await transcribe_file(voice_path)
+                text = result.get("full_text", "").strip()
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
         if not text:
             await _tg_send(chat_id, "Не удалось распознать голосовое. Попробуйте текстом.")
