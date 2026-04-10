@@ -425,6 +425,40 @@ async def provider_health(provider_type: str):
         return {"healthy": False, "message": str(e)}
 
 
+# ──────────────── Temp Audio Serve (for RunPod) ────────────────
+
+from fastapi.responses import FileResponse
+
+
+@router.get("/temp-audio/{token}")
+async def serve_temp_audio(token: str):
+    """Serve audio file temporarily for RunPod to download.
+
+    Token-based access — no auth required, but token is signed and single-use.
+    """
+    import time
+    from app.services.providers.runpod_provider import _temp_file_tokens
+
+    file_info = _temp_file_tokens.get(token)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="Token not found or expired")
+
+    # Check expiry (1 hour)
+    if time.time() - file_info["ts"] > 3600:
+        _temp_file_tokens.pop(token, None)
+        raise HTTPException(status_code=410, detail="Token expired")
+
+    file_path = file_info["path"]
+    if not Path(file_path).exists():
+        _temp_file_tokens.pop(token, None)
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Clean up token after serving (single-use)
+    _temp_file_tokens.pop(token, None)
+
+    return FileResponse(file_path, media_type="audio/ogg")
+
+
 # ──────────────── Agent Upload ────────────────
 
 @router.post("/agent/upload")

@@ -138,7 +138,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 # Auth-free paths
-_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/connect", "/api/telegram/webhook", "/onboarding")
+_PUBLIC_PREFIXES = ("/login", "/register", "/logout", "/health", "/static", "/api/auth/", "/auth/", "/zoom/connect", "/api/telegram/webhook", "/onboarding", "/api/temp-audio/")
 
 
 @app.middleware("http")

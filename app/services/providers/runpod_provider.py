@@ -44,33 +44,25 @@ class RunPodWhisperProvider(TranscriptionProvider):
     async def transcribe(self, file_path: str, user_id: int | None = None) -> dict:
         """Transcribe audio via RunPod Serverless endpoint."""
 
-        # Step 1: Compress audio (reuse bukvitsa logic)
+        # Step 1: Compress audio
         send_path = await self._compress_audio(file_path)
         compressed = send_path != file_path
 
         try:
             file_size = Path(send_path).stat().st_size
+            size_mb = file_size / (1024 * 1024)
 
-            # Step 2: Prepare input — base64 for small files, R2 URL for large
-            if file_size <= 10 * 1024 * 1024:  # 10 MB — RunPod payload limit
-                audio_b64 = base64.b64encode(Path(send_path).read_bytes()).decode()
-                payload = {
-                    "input": {
-                        "audio_base64": audio_b64,
-                        "language": "ru",
-                        "beam_size": 5,
-                    }
+            # Step 2: Always use URL — serve file via ZoomHub's temp endpoint
+            # base64 fails for files >7MB due to RunPod 10MB payload limit
+            audio_url = await self._get_serve_url(send_path)
+            logger.info(f"RunPod transcription: {size_mb:.1f} MB, URL ready")
+            payload = {
+                "input": {
+                    "audio_url": audio_url,
+                    "language": "ru",
+                    "beam_size": 5,
                 }
-            else:
-                # Upload to R2 and pass URL
-                audio_url = await self._upload_to_r2(send_path)
-                payload = {
-                    "input": {
-                        "audio_url": audio_url,
-                        "language": "ru",
-                        "beam_size": 5,
-                    }
-                }
+            }
 
             # Step 3: Submit job
             async with httpx.AsyncClient(timeout=30) as client:
@@ -125,42 +117,26 @@ class RunPodWhisperProvider(TranscriptionProvider):
 
         raise TimeoutError(f"RunPod job {job_id} timed out after {MAX_WAIT}s")
 
-    async def _upload_to_r2(self, file_path: str) -> str:
-        """Upload file to Cloudflare R2 and return presigned URL.
+    async def _get_serve_url(self, file_path: str) -> str:
+        """Generate a temporary public URL to serve file via ZoomHub.
 
-        Falls back to base64 if R2 is not configured.
+        Creates a signed token so RunPod can download the file directly
+        from our Fly.io server. No external storage needed.
         """
-        from app.config import R2_ENDPOINT, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET
+        import hashlib
+        import time
+        from app.config import SECRET_KEY, APP_URL
 
-        if not R2_ENDPOINT or not R2_ACCESS_KEY:
-            # Fallback: return base64 (slower but works)
-            logger.warning("R2 not configured — falling back to base64 (slow for large files)")
-            raise ValueError("File too large for base64 and R2 not configured")
+        # Create a temp token: sha256(secret + filepath + timestamp)
+        # Valid for 1 hour
+        ts = str(int(time.time()))
+        token = hashlib.sha256(f"{SECRET_KEY}:{file_path}:{ts}".encode()).hexdigest()[:32]
 
-        import boto3
-        from botocore.config import Config
+        # Store token -> filepath mapping in a module-level dict (cleaned up after use)
+        _temp_file_tokens[token] = {"path": file_path, "ts": int(ts)}
 
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=R2_ENDPOINT,
-            aws_access_key_id=R2_ACCESS_KEY,
-            aws_secret_access_key=R2_SECRET_KEY,
-            config=Config(signature_version="s3v4"),
-        )
-
-        key = f"transcription/{Path(file_path).name}"
-
-        logger.info(f"Uploading {Path(file_path).name} to R2...")
-        s3.upload_file(file_path, R2_BUCKET, key)
-
-        # Generate presigned URL (1 hour expiry)
-        url = s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": R2_BUCKET, "Key": key},
-            ExpiresIn=3600,
-        )
-
-        logger.info(f"R2 upload done, presigned URL generated")
+        url = f"{APP_URL}/api/temp-audio/{token}"
+        logger.info(f"Serve URL created: {url}")
         return url
 
     async def _compress_audio(self, file_path: str) -> str:
@@ -207,3 +183,7 @@ class RunPodWhisperProvider(TranscriptionProvider):
                 return resp.status_code == 200
         except Exception:
             return False
+
+
+# Module-level dict for temp file tokens (used by serve_temp_audio endpoint)
+_temp_file_tokens: dict[str, dict] = {}
