@@ -153,6 +153,18 @@ async def upload_meeting(
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
+
+    # Check usage limit (same as Telegram bot)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if not user.usage_month_start or user.usage_month_start.month != now.month:
+        user.usage_seconds_month = 0
+        user.usage_month_start = now
+        db.commit()
+    limit_seconds = (user.plan_hours_limit or 4) * 3600
+    if (user.usage_seconds_month or 0) >= limit_seconds:
+        raise HTTPException(status_code=403, detail=f"Лимит исчерпан: {user.plan_hours_limit or 4} ч/мес. Перейдите на платный тариф.")
+
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=422, detail=f"Формат {ext} не поддерживается")
