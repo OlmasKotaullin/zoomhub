@@ -114,6 +114,14 @@ def init_db():
             if "user_openrouter_api_key" not in user_cols:
                 migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS user_openrouter_api_key VARCHAR(500)")
 
+            if "plan" not in user_cols:
+                migrations += [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'free'",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_hours_limit INTEGER DEFAULT 2",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_seconds_month INTEGER DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_month_start TIMESTAMP",
+                ]
+
             # invite_codes: owner_id, used_by_id
             if insp.has_table("invite_codes"):
                 inv_cols = {col["name"] for col in insp.get_columns("invite_codes")}

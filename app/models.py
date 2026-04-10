@@ -103,6 +103,11 @@ class User(Base):
     # Onboarding
     onboarding_completed = Column(Boolean, default=False)
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)
+    # Subscription & usage
+    plan = Column(String(20), default="free")  # free | start | pro
+    plan_hours_limit = Column(Integer, default=2)  # hours per month (free=2, start=30, pro=100)
+    usage_seconds_month = Column(Integer, default=0)  # seconds used this month
+    usage_month_start = Column(DateTime, nullable=True)  # start of current billing month
 
     folders = relationship("Folder", back_populates="user", cascade="all, delete-orphan")
     meetings = relationship("Meeting", back_populates="user", cascade="all, delete-orphan")

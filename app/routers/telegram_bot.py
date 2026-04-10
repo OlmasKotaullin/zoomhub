@@ -252,6 +252,26 @@ def _find_user_by_chat_id(chat_id: str, db: Session) -> User | None:
     return db.query(User).filter(User.telegram_chat_id == chat_id).first()
 
 
+def _check_usage_limit(user: User, db: Session) -> tuple[bool, float, float]:
+    """Check if user has remaining hours. Returns (ok, used_hours, limit_hours).
+
+    Resets monthly counter if new month started.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
+    # Reset if new month
+    if not user.usage_month_start or user.usage_month_start.month != now.month:
+        user.usage_seconds_month = 0
+        user.usage_month_start = now
+        db.commit()
+
+    limit_hours = user.plan_hours_limit or 2
+    used_hours = (user.usage_seconds_month or 0) / 3600
+    ok = used_hours < limit_hours
+    return ok, round(used_hours, 1), limit_hours
+
+
 # ──────────────── Webhook handler ────────────────
 
 @router.post("/api/telegram/webhook")
@@ -328,12 +348,13 @@ async def _handle_start(chat_id: str, text: str):
                     db.commit()
                     await _tg_send(
                         chat_id,
-                        f"*Привет, {user.name}!*\n\n"
+                        f"*Привет, {user.name}!* 👋\n\n"
                         f"Telegram подключён к ZoomHub.\n\n"
-                        f"Теперь вы можете:\n"
-                        f"• Отправить аудио/видео — получите транскрипт + саммари\n"
-                        f"• Результаты автоматически появятся на сайте\n\n"
-                        f"Отправьте первый файл!"
+                        f"Что умеет бот:\n"
+                        f"• Отправьте аудио/видео — конспект с задачами за 2-3 мин\n"
+                        f"• Транскрипт с таймкодами (.txt)\n"
+                        f"• AI-чат: задайте вопрос по записи на сайте\n\n"
+                        f"Бесплатно {user.plan_hours_limit or 2} ч/мес. Попробуйте — отправьте первый файл!"
                     )
                     return
 
@@ -352,8 +373,15 @@ async def _handle_start(chat_id: str, text: str):
                 await _tg_send(
                     chat_id,
                     "*ZoomHub* — рабочая память ваших встреч\n\n"
-                    "Для подключения перейдите по ссылке из настроек ZoomHub.\n\n"
-                    f"Ещё нет аккаунта? Зарегистрируйтесь: {APP_URL}"
+                    "Отправьте аудио или видео — получите:\n"
+                    "• Конспект с задачами и темами\n"
+                    "• Транскрипт с таймкодами\n"
+                    "• AI-чат: задавайте вопросы по записи\n\n"
+                    "Для начала нужен аккаунт ZoomHub.",
+                    reply_markup={"inline_keyboard": [[{
+                        "text": "Создать аккаунт",
+                        "url": APP_URL
+                    }]]}
                 )
     finally:
         db.close()
@@ -388,6 +416,21 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
                 chat_id,
                 "Аккаунт не подключён.\n"
                 f"Подключите Telegram в настройках: {APP_URL}/settings"
+            )
+            return
+
+        # Check usage limit
+        ok, used, limit = _check_usage_limit(user, db)
+        if not ok:
+            await _tg_send(
+                chat_id,
+                f"⚠️ Лимит исчерпан: {used:.1f} из {limit:.0f} ч/мес\n\n"
+                f"Тариф *{user.plan or 'free'}* — {limit:.0f} ч/мес.\n"
+                f"Для увеличения лимита — тариф Старт (30ч) за 499 ₽/мес.",
+                reply_markup={"inline_keyboard": [[{
+                    "text": "Посмотреть тарифы",
+                    "url": f"{APP_URL}/settings#billing"
+                }]]}
             )
             return
 
@@ -553,6 +596,13 @@ async def _send_result(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
             )
             if topics_text:
                 parts.append(f"\n*Темы:* {topics_text}")
+
+        # Usage info
+        user = db.query(User).filter(User.id == meeting.user_id).first()
+        if user:
+            _, used, limit = _check_usage_limit(user, db)
+            remaining = max(0, limit - used)
+            parts.append(f"\n📊 Осталось: {remaining:.1f} из {limit:.0f} ч/мес")
 
         # Branding
         parts.append("\n──────────────")

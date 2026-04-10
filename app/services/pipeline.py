@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
 
 from app.database import SessionLocal
-from app.models import Meeting, MeetingStatus, Transcript, Summary
+from app.models import Meeting, MeetingStatus, Transcript, Summary, User
 from app.services.transcriber import transcribe_file
 from app.services.summarizer import generate_summary
 from app.services.notify import notify_user
@@ -44,6 +44,34 @@ def _save_transcript(meeting_id: int, full_text: str, segments: list):
             existing.segments = segments
         else:
             db.add(Transcript(meeting_id=meeting_id, full_text=full_text, segments=segments))
+        db.commit()
+    finally:
+        db.close()
+
+
+@_db_retry
+def _update_duration_and_usage(meeting_id: int, duration_seconds: int):
+    """Save duration to meeting and update user's monthly usage."""
+    if not duration_seconds:
+        return
+    db = SessionLocal()
+    try:
+        meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if not meeting:
+            return
+        meeting.duration_seconds = duration_seconds
+
+        # Update user usage
+        user = db.query(User).filter(User.id == meeting.user_id).first()
+        if user:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            # Reset monthly usage if new month
+            if not user.usage_month_start or user.usage_month_start.month != now.month:
+                user.usage_seconds_month = 0
+                user.usage_month_start = now
+            user.usage_seconds_month = (user.usage_seconds_month or 0) + duration_seconds
+
         db.commit()
     finally:
         db.close()
@@ -155,6 +183,9 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
             # Сохраняем транскрипт — с retry
             transcript_text = result["full_text"]
             _save_transcript(meeting_id, result["full_text"], result["segments"])
+
+            # Сохраняем duration и обновляем usage
+            _update_duration_and_usage(meeting_id, result.get("duration_seconds", 0))
 
         except Exception as e:
             logger.error(f"[{meeting_id}] Ошибка транскрибации: {e}")
