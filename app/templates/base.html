@@ -167,23 +167,23 @@
         </div>
       </div>
 
-      <!-- Буквица usage -->
-      <div class="px-3 pb-2" id="bukvitsaWidget">
+      <!-- ZoomHub usage -->
+      <div class="px-3 pb-2" id="usageWidget">
         <div class="bg-g-50 rounded-xl p-3">
           <div class="flex items-center gap-3">
             <div class="relative flex-shrink-0">
               <svg viewBox="0 0 36 36" class="w-11 h-11 -rotate-90">
                 <circle cx="18" cy="18" r="15" fill="none" stroke="#eef1f6" stroke-width="2.5"/>
-                <circle id="bkvCircle" cx="18" cy="18" r="15" fill="none" stroke="url(#bkvGrad)" stroke-width="2.5"
+                <circle id="usageCircle" cx="18" cy="18" r="15" fill="none" stroke="url(#usageGrad)" stroke-width="2.5"
                   stroke-dasharray="94.2" stroke-dashoffset="94.2" stroke-linecap="round"/>
-                <defs><linearGradient id="bkvGrad"><stop offset="0%" stop-color="#16a34a"/><stop offset="100%" stop-color="#4ade80"/></linearGradient></defs>
+                <defs><linearGradient id="usageGrad"><stop offset="0%" stop-color="#0b5cff"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs>
               </svg>
-              <span id="bkvPct" class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-g-500">0%</span>
+              <span id="usagePct" class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-g-500">0%</span>
             </div>
             <div class="min-w-0">
-              <p class="text-[11px] font-semibold text-g-700">Буквица</p>
-              <p id="bkvHours" class="text-[10px] text-g-400">— / 30 ч</p>
-              <p id="bkvLeft" class="text-[10px] text-ok font-medium">— ч осталось</p>
+              <p class="text-[11px] font-semibold text-g-700">ZoomHub</p>
+              <p id="usageHours" class="text-[10px] text-g-400">— / — ч</p>
+              <p id="usageLeft" class="text-[10px] text-zoom font-medium">— ч осталось</p>
             </div>
           </div>
         </div>
@@ -191,17 +191,18 @@
 
       <script>
       (function() {
-        fetch('/api/bukvitsa-usage').then(r => r.json()).then(d => {
+        fetch('/api/usage').then(r => r.json()).then(d => {
           const total = 94.2;
           const offset = total - (total * d.percent / 100);
-          document.getElementById('bkvCircle').style.cssText = 'stroke-dashoffset:'+offset+';transition:stroke-dashoffset 1s ease';
-          document.getElementById('bkvPct').textContent = d.percent + '%';
-          document.getElementById('bkvHours').textContent = d.used_hours + ' / ' + d.limit_hours + ' ч';
-          document.getElementById('bkvLeft').textContent = d.left_hours + ' ч осталось';
+          document.getElementById('usageCircle').style.cssText = 'stroke-dashoffset:'+offset+';transition:stroke-dashoffset 1s ease';
+          document.getElementById('usagePct').textContent = d.percent + '%';
+          document.getElementById('usageHours').textContent = d.used_hours + ' / ' + d.limit_hours + ' ч';
+          document.getElementById('usageLeft').textContent = d.left_hours + ' ч осталось';
           if (d.percent > 80) {
-            document.getElementById('bkvLeft').className = 'text-[10px] text-warn font-medium';
-            document.querySelector('#bkvGrad stop').setAttribute('stop-color', '#f59e0b');
-            document.querySelector('#bkvGrad stop:last-child').setAttribute('stop-color', '#fbbf24');
+            document.getElementById('usageLeft').className = 'text-[10px] font-medium';
+            document.getElementById('usageLeft').style.color = '#f59e0b';
+            document.querySelector('#usageGrad stop').setAttribute('stop-color', '#f59e0b');
+            document.querySelector('#usageGrad stop:last-child').setAttribute('stop-color', '#fbbf24');
           }
         }).catch(() => {});
       })();

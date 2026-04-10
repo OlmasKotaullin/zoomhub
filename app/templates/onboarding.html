@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Настройка — ZoomHub</title>
+  <title>Добро пожаловать — ZoomHub</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
@@ -12,7 +12,7 @@
         colors: {
           zoom: { DEFAULT: '#0b5cff', hover: '#0047d4', light: '#e8f0fe' },
           g: { 50: '#f7f9fc', 100: '#eef1f6', 200: '#dde3ed', 300: '#c3cbd9', 400: '#8f9bb3', 500: '#6b7a94', 600: '#4a5568', 700: '#374151', 800: '#232b3a', 900: '#131820' },
-          ok: '#16a34a',
+          ok: '#16a34a', accent: '#f97316',
         },
         fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
       }}
@@ -31,9 +31,9 @@
 
     <!-- Progress bar -->
     <div class="flex items-center gap-2 mb-8">
-      <div id="progressFill" class="h-1 bg-zoom rounded-full transition-all duration-500" style="width:14%"></div>
+      <div id="progressFill" class="h-1 bg-zoom rounded-full transition-all duration-500" style="width:33%"></div>
       <div class="flex-1 h-1 bg-g-200 rounded-full"></div>
-      <span id="stepLabel" class="text-[11px] text-g-400 font-medium ml-2">1 / 7</span>
+      <span id="stepLabel" class="text-[11px] text-g-400 font-medium ml-2">1 / 3</span>
     </div>
 
     <!-- Step 1: Welcome -->
@@ -44,52 +44,62 @@
             <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
           </div>
           <h1 class="text-2xl font-extrabold text-g-900">Добро пожаловать в ZoomHub!</h1>
-          <p class="text-g-500 mt-2">{{ user.name }}, давайте настроим всё за 5 минут</p>
+          <p class="text-g-500 mt-2">{{ user.name }}, рабочая память ваших встреч</p>
         </div>
 
         <div class="space-y-4 text-[14px] text-g-600">
           <div class="flex gap-3 items-start bg-g-50 rounded-xl p-4">
             <span class="text-xl">🎙</span>
-            <div><strong class="text-g-800">Zoom завершается</strong> → запись сохраняется автоматически</div>
-          </div>
-          <div class="flex gap-3 items-start bg-g-50 rounded-xl p-4">
-            <span class="text-xl">📝</span>
-            <div><strong class="text-g-800">Агент находит запись</strong> → отправляет в Буквицу → получает текст</div>
+            <div><strong class="text-g-800">Отправьте аудио/видео</strong> в Telegram-бот или загрузите на сайте</div>
           </div>
           <div class="flex gap-3 items-start bg-g-50 rounded-xl p-4">
             <span class="text-xl">🧠</span>
-            <div><strong class="text-g-800">ZoomHub делает саммари</strong> → задачи, темы, инсайты → уведомление в Telegram</div>
+            <div><strong class="text-g-800">AI создаст конспект</strong> → задачи, темы, ключевые решения за 2-3 минуты</div>
+          </div>
+          <div class="flex gap-3 items-start bg-g-50 rounded-xl p-4">
+            <span class="text-xl">💬</span>
+            <div><strong class="text-g-800">Задавайте вопросы</strong> → AI-чат ответит по любой записи с таймкодами</div>
           </div>
         </div>
 
+        <div class="bg-accent/5 border border-accent/20 rounded-xl p-4 mt-4 text-sm text-g-600">
+          <strong class="text-accent">Бесплатно:</strong> {{ user.plan_hours_limit or 4 }} часа транскрипции в месяц. Транскрипт с таймкодами + AI-конспект + AI-чат.
+        </div>
+
         <button onclick="goStep(2)" class="w-full mt-6 bg-zoom hover:bg-zoom-hover text-white font-semibold py-3 rounded-xl transition">
-          Начать настройку →
+          Подключить Telegram-бот →
         </button>
       </div>
     </div>
 
-    <!-- Step 2: Bukvitsa -->
+    <!-- Step 2: Connect Telegram Bot -->
     <div class="step" data-step="2">
       <div class="bg-white rounded-2xl shadow-lg p-8 anim">
-        <h2 class="text-xl font-bold text-g-900 mb-2">📝 Шаг 1. Буквица</h2>
-        <p class="text-g-500 text-sm mb-6">Буквица — сервис распознавания речи. Нужна подписка.</p>
+        <h2 class="text-xl font-bold text-g-900 mb-2">📱 Подключите Telegram-бот</h2>
+        <p class="text-g-500 text-sm mb-6">Бот — основной способ работы с ZoomHub. Отправляете аудио → получаете конспект.</p>
 
         <div class="bg-g-50 rounded-xl p-5 mb-4">
-          <h3 class="font-semibold text-g-800 text-sm mb-2">Если у вас уже есть Буквица:</h3>
-          <p class="text-sm text-g-500">Отлично! Переходите к следующему шагу.</p>
+          <p class="text-sm text-g-600 mb-3">Нажмите кнопку — откроется бот ZoomHub в Telegram:</p>
+          <button onclick="connectTelegram()" class="w-full py-3 bg-zoom hover:bg-zoom-hover text-white font-semibold rounded-xl transition text-base">
+            🔗 Открыть бот в Telegram
+          </button>
+          <p class="text-[11px] text-g-400 mt-2">Нажмите /start в боте — аккаунт привяжется автоматически.</p>
         </div>
 
-        <div class="bg-zoom/5 rounded-xl p-5 mb-6 border border-zoom/10">
-          <h3 class="font-semibold text-zoom text-sm mb-2">Если нет — подключите:</h3>
-          <ol class="text-sm text-g-600 space-y-2 list-decimal list-inside">
-            <li>Откройте Telegram</li>
-            <li>Найдите бота <strong>@bykvitsa</strong></li>
-            <li>Оформите подписку (~600 ₽/мес или 3800 ₽/год)</li>
-            <li>Вы получите 30 часов транскрипции в месяц</li>
-          </ol>
-          <a href="https://t.me/bykvitsa" target="_blank" class="inline-block mt-3 text-sm font-semibold text-zoom hover:underline">
-            Открыть @bykvitsa в Telegram →
-          </a>
+        <div class="space-y-3 text-sm text-g-600 mb-4">
+          <p class="font-semibold text-g-800">Что умеет бот:</p>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok">✓</span> Транскрипт с таймкодами за 2-3 минуты
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok">✓</span> AI-конспект с задачами автоматически
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok">✓</span> Скачиваемый .txt файл
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok">✓</span> Файлы до 2 ГБ
+          </div>
         </div>
 
         <div class="flex gap-3">
@@ -99,125 +109,38 @@
       </div>
     </div>
 
-    <!-- Step 3: Download Agent -->
+    <!-- Step 3: Done -->
     <div class="step" data-step="3">
-      <div class="bg-white rounded-2xl shadow-lg p-8 anim">
-        <h2 class="text-xl font-bold text-g-900 mb-2">💻 Шаг 2. Скачайте агент</h2>
-        <p class="text-g-500 text-sm mb-6">Агент работает на вашем компьютере: следит за записями Zoom и отправляет их в Буквицу.</p>
-
-        <div class="bg-g-50 rounded-xl p-4 mb-6">
-          <p class="text-sm font-semibold text-g-700 mb-2">🍎 macOS — одна команда в Терминале:</p>
-          <code class="block bg-white px-3 py-2 rounded-lg font-mono text-xs text-zoom break-all select-all cursor-pointer border border-g-200" onclick="navigator.clipboard.writeText(this.textContent.trim()); this.style.borderColor='#22c55e'; setTimeout(() => this.style.borderColor='', 1500)">curl -sL https://raw.githubusercontent.com/OlmasKotaullin/zoomhub/main/agent/install-mac.sh | bash</code>
-          <p class="text-[10px] text-g-400 mt-1">Нажмите чтобы скопировать → откройте Терминал (Cmd+Пробел → "Terminal") → вставьте → Enter</p>
-        </div>
-
-        <div class="bg-g-50/50 rounded-xl p-4 text-xs text-g-400 mb-6">
-          <strong class="text-g-600">Что установится:</strong> Python-агент в ~/.zoomhub/agent/ с автозапуском при входе в систему. Никаких глобальных зависимостей. Не требует прав администратора.
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="goStep(2)" class="flex-1 py-3 border border-g-200 rounded-xl text-g-500 font-semibold hover:bg-g-50 transition">← Назад</button>
-          <button onclick="goStep(4)" class="flex-1 py-3 bg-zoom hover:bg-zoom-hover text-white font-semibold rounded-xl transition">Далее →</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 4: API Token -->
-    <div class="step" data-step="4">
-      <div class="bg-white rounded-2xl shadow-lg p-8 anim">
-        <h2 class="text-xl font-bold text-g-900 mb-2">🔑 Шаг 3. API-токен</h2>
-        <p class="text-g-500 text-sm mb-6">Токен нужен агенту для связи с сервером ZoomHub.</p>
-
-        <div class="bg-g-50 rounded-xl p-5 mb-6">
-          <p class="text-sm text-g-600 mb-3">Нажмите кнопку — токен сгенерируется автоматически:</p>
-          <div class="flex gap-2">
-            <input id="onboardingToken" type="text" readonly placeholder="Нажмите 'Сгенерировать'"
-                   class="flex-1 px-3 py-2 border border-g-200 rounded-lg text-xs font-mono bg-white">
-            <button onclick="genToken()" class="px-4 py-2 bg-zoom text-white text-xs font-semibold rounded-lg hover:bg-zoom-hover transition">
-              Сгенерировать
-            </button>
-          </div>
-          <p class="text-[11px] text-g-400 mt-2">Скопируйте токен — он понадобится при запуске агента.</p>
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="goStep(3)" class="flex-1 py-3 border border-g-200 rounded-xl text-g-500 font-semibold hover:bg-g-50 transition">← Назад</button>
-          <button onclick="goStep(5)" class="flex-1 py-3 bg-zoom hover:bg-zoom-hover text-white font-semibold rounded-xl transition">Далее →</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 5: Setup Agent -->
-    <div class="step" data-step="5">
-      <div class="bg-white rounded-2xl shadow-lg p-8 anim">
-        <h2 class="text-xl font-bold text-g-900 mb-2">🚀 Шаг 4. Запустите агент</h2>
-        <p class="text-g-500 text-sm mb-6">При первом запуске агент попросит настроить Telegram.</p>
-
-        <div class="space-y-4 text-sm text-g-600 mb-6">
-          <div class="flex gap-3 items-start">
-            <span class="w-6 h-6 bg-zoom text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-            <div>Запустите скачанный файл (ZoomHubAgent или <code class="font-mono text-xs bg-g-100 px-1 rounded">python zoomhub_agent_v2.py --setup</code>)</div>
-          </div>
-          <div class="flex gap-3 items-start">
-            <span class="w-6 h-6 bg-zoom text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-            <div>Вставьте API-токен из предыдущего шага</div>
-          </div>
-          <div class="flex gap-3 items-start">
-            <span class="w-6 h-6 bg-zoom text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-            <div>Введите номер телефона (Telegram) → получите код → введите код</div>
-          </div>
-          <div class="flex gap-3 items-start">
-            <span class="w-6 h-6 bg-ok text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">✓</span>
-            <div><strong class="text-g-800">Готово!</strong> Агент начнёт мониторить папку Zoom автоматически</div>
-          </div>
-        </div>
-
-        <div class="bg-ok/5 border border-ok/20 rounded-xl p-4 text-sm text-g-600 mb-6">
-          <strong class="text-ok">Безопасность:</strong> Telegram-сессия хранится только на вашем компьютере. Никуда не передаётся.
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="goStep(4)" class="flex-1 py-3 border border-g-200 rounded-xl text-g-500 font-semibold hover:bg-g-50 transition">← Назад</button>
-          <button onclick="goStep(6)" class="flex-1 py-3 bg-zoom hover:bg-zoom-hover text-white font-semibold rounded-xl transition">Далее →</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 6: Telegram Notifications -->
-    <div class="step" data-step="6">
-      <div class="bg-white rounded-2xl shadow-lg p-8 anim">
-        <h2 class="text-xl font-bold text-g-900 mb-2">📱 Шаг 5. Уведомления</h2>
-        <p class="text-g-500 text-sm mb-6">Получайте саммари встреч прямо в Telegram.</p>
-
-        <div class="bg-g-50 rounded-xl p-5 mb-6">
-          <p class="text-sm text-g-600 mb-3">Нажмите кнопку — откроется бот ZoomHub в Telegram:</p>
-          <button onclick="connectTelegram()" class="w-full py-3 bg-zoom hover:bg-zoom-hover text-white font-semibold rounded-xl transition">
-            🔗 Подключить Telegram-уведомления
-          </button>
-          <p class="text-[11px] text-g-400 mt-2">Необязательно — можно настроить позже в разделе Настройки.</p>
-        </div>
-
-        <div class="flex gap-3">
-          <button onclick="goStep(5)" class="flex-1 py-3 border border-g-200 rounded-xl text-g-500 font-semibold hover:bg-g-50 transition">← Назад</button>
-          <button onclick="goStep(7)" class="flex-1 py-3 bg-zoom hover:bg-zoom-hover text-white font-semibold rounded-xl transition">Далее →</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 7: Done -->
-    <div class="step" data-step="7">
       <div class="bg-white rounded-2xl shadow-lg p-8 anim text-center">
         <div class="inline-flex items-center justify-center w-20 h-20 bg-ok/10 rounded-full mb-4">
           <span class="text-4xl">🎉</span>
         </div>
         <h2 class="text-2xl font-extrabold text-g-900 mb-2">Всё готово!</h2>
-        <p class="text-g-500 mb-6">Теперь просто проводите встречи в Zoom — ZoomHub сделает остальное.</p>
+        <p class="text-g-500 mb-6">Отправьте первое аудио в бот или загрузите здесь на сайте.</p>
 
-        <div class="bg-g-50 rounded-xl p-5 text-left text-sm text-g-600 mb-6 space-y-2">
-          <p>✅ Буквица подключена</p>
-          <p>✅ Агент настроен</p>
-          <p>✅ Саммари через AI (Groq, бесплатно)</p>
-          <p>✅ Уведомления в Telegram</p>
+        <div class="bg-g-50 rounded-xl p-5 text-left text-sm text-g-600 mb-4 space-y-3">
+          <div class="flex gap-2 items-center">
+            <span class="text-ok text-lg">✅</span>
+            <span>Собственная AI-транскрибация (не Буквица)</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok text-lg">✅</span>
+            <span>Конспект с задачами и таймкодами</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok text-lg">✅</span>
+            <span>AI-чат: задайте вопрос по любой записи</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="text-ok text-lg">✅</span>
+            <span>{{ user.plan_hours_limit or 4 }} ч/мес бесплатно</span>
+          </div>
+        </div>
+
+        <div class="bg-zoom/5 border border-zoom/10 rounded-xl p-4 text-left text-sm text-g-600 mb-6">
+          <p class="font-semibold text-zoom mb-1">Также можно:</p>
+          <p>• Подключить Zoom → записи обрабатываются автоматически (в Настройках)</p>
+          <p>• Загружать файлы прямо на сайте</p>
         </div>
 
         <form method="POST" action="/onboarding/complete">
@@ -232,7 +155,7 @@
 
   <script>
   let currentStep = 1;
-  const totalSteps = 7;
+  const totalSteps = 3;
 
   function goStep(n) {
     document.querySelector(`.step[data-step="${currentStep}"]`).classList.remove('active');
@@ -241,19 +164,6 @@
     document.getElementById('progressFill').style.width = (n / totalSteps * 100) + '%';
     document.getElementById('stepLabel').textContent = n + ' / ' + totalSteps;
     window.scrollTo(0, 0);
-  }
-
-  function genToken() {
-    fetch('/api/agent/token').then(r => r.json()).then(data => {
-      if (data.token) {
-        const el = document.getElementById('onboardingToken');
-        el.value = data.token;
-        navigator.clipboard.writeText(data.token).then(() => {
-          el.style.borderColor = '#16a34a';
-          el.style.backgroundColor = '#f0fdf4';
-        });
-      }
-    });
   }
 
   function connectTelegram() {

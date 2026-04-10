@@ -576,3 +576,33 @@ async def agent_upload_transcript(
     asyncio.create_task(process_meeting_transcript_only(meeting.id))
 
     return {"id": meeting.id, "title": meeting.title, "status": meeting.status.value}
+
+
+# ──────────────── Usage ────────────────
+
+@router.get("/usage")
+async def get_usage(request: Request, db: Session = Depends(get_db)):
+    """Get current user's monthly usage."""
+    user = get_current_user(request, db)
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
+    # Reset if new month
+    if not user.usage_month_start or user.usage_month_start.month != now.month:
+        user.usage_seconds_month = 0
+        user.usage_month_start = now
+        db.commit()
+
+    limit_hours = user.plan_hours_limit or 4
+    used_seconds = user.usage_seconds_month or 0
+    used_hours = round(used_seconds / 3600, 1)
+    left_hours = round(max(0, limit_hours - used_hours), 1)
+    percent = min(100, round(used_hours / limit_hours * 100)) if limit_hours > 0 else 0
+
+    return {
+        "plan": user.plan or "free",
+        "used_hours": used_hours,
+        "limit_hours": limit_hours,
+        "left_hours": left_hours,
+        "percent": percent,
+    }
