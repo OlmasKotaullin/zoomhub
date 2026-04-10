@@ -318,11 +318,16 @@ async def telegram_webhook(request: Request):
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
         return {"ok": True}
 
-    # Priority 2: Media ALWAYS takes priority (exits chat mode)
+    # Priority 2: Media handling (depends on chat mode)
     file_id, filename, file_size = _extract_media(message)
     message_id = message.get("message_id", 0)
     if file_id:
-        _chat_state.pop(chat_id, None)  # exit chat mode if active
+        if chat_id in _chat_state and "voice" in message:
+            # Voice in chat mode → transcribe and send as AI question
+            asyncio.create_task(_handle_voice_question(chat_id, file_id, file_size, message_id))
+            return {"ok": True}
+        # Regular media → new recording (exit chat mode)
+        _chat_state.pop(chat_id, None)
         asyncio.create_task(_handle_media(chat_id, file_id, filename, file_size, message_id=message_id))
         return {"ok": True}
 
@@ -688,6 +693,46 @@ async def _handle_callback(callback: dict):
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
     finally:
         db.close()
+
+
+# ──────────────── Voice question in chat mode ────────────────
+
+async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, message_id: int):
+    """Transcribe voice message and send as AI chat question."""
+    import tempfile
+
+    try:
+        await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
+
+        # Download voice to temp file
+        tmp_dir = tempfile.mkdtemp()
+        voice_path = f"{tmp_dir}/voice.ogg"
+
+        success = await _tg_download_file(file_id, voice_path, file_size=file_size,
+                                          message_id=message_id, chat_id=chat_id)
+        if not success:
+            await _tg_send(chat_id, "Не удалось скачать голосовое.")
+            return
+
+        # Quick transcribe via RunPod
+        from app.services.transcriber import transcribe_file
+        result = await transcribe_file(voice_path)
+        text = result.get("full_text", "").strip()
+
+        # Cleanup
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        if not text:
+            await _tg_send(chat_id, "Не удалось распознать голосовое. Попробуйте текстом.")
+            return
+
+        # Send transcribed text as chat message
+        await _handle_chat_message(chat_id, text)
+
+    except Exception as e:
+        logger.error(f"Voice question error: {e}", exc_info=True)
+        await _tg_send(chat_id, "Ошибка распознавания голосового. Попробуйте текстом.")
 
 
 # ──────────────── Chat mode ────────────────
