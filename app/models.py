@@ -105,7 +105,7 @@ class User(Base):
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)
     # Subscription & usage
     plan = Column(String(20), default="free")  # free | start | pro
-    plan_hours_limit = Column(Integer, default=2)  # hours per month (free=2, start=30, pro=100)
+    plan_hours_limit = Column(Integer, default=4)  # hours per month (free=4, start=30, pro=100)
     usage_seconds_month = Column(Integer, default=0)  # seconds used this month
     usage_month_start = Column(DateTime, nullable=True)  # start of current billing month
 

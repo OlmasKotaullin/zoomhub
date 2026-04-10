@@ -266,7 +266,7 @@ def _check_usage_limit(user: User, db: Session) -> tuple[bool, float, float]:
         user.usage_month_start = now
         db.commit()
 
-    limit_hours = user.plan_hours_limit or 2
+    limit_hours = user.plan_hours_limit or 4
     used_hours = (user.usage_seconds_month or 0) / 3600
     ok = used_hours < limit_hours
     return ok, round(used_hours, 1), limit_hours
@@ -354,7 +354,7 @@ async def _handle_start(chat_id: str, text: str):
                         f"• Отправьте аудио/видео — конспект с задачами за 2-3 мин\n"
                         f"• Транскрипт с таймкодами (.txt)\n"
                         f"• AI-чат: задайте вопрос по записи на сайте\n\n"
-                        f"Бесплатно {user.plan_hours_limit or 2} ч/мес. Попробуйте — отправьте первый файл!"
+                        f"Бесплатно {user.plan_hours_limit or 4} ч/мес. Попробуйте — отправьте первый файл!"
                     )
                     return
 

@@ -117,7 +117,7 @@ def init_db():
             if "plan" not in user_cols:
                 migrations += [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'free'",
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_hours_limit INTEGER DEFAULT 2",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_hours_limit INTEGER DEFAULT 4",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_seconds_month INTEGER DEFAULT 0",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS usage_month_start TIMESTAMP",
                 ]
