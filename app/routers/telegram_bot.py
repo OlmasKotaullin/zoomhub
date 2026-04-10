@@ -93,25 +93,27 @@ async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0,
 
 async def _tg_download_via_telethon(file_id: str, dest_path: str, file_size: int = 0,
                                      message_id: int = 0, chat_id: str = "") -> bool:
-    """Download large file via Telethon MTProto (up to 2 GB).
+    """Download large file via Telethon Bot Client (up to 2 GB).
 
-    Uses the bot's Telethon userbot session to download from the chat
-    where the message was sent. Requires message_id and chat_id.
+    Creates a Telethon client using the BOT TOKEN (not userbot).
+    Bot can access its own messages — no need for userbot session.
     """
     try:
-        from app.services.providers.bukvitsa_provider import _get_client
-
-        client = await _get_client()
         size_mb = file_size / (1024 * 1024)
-        logger.info(f"Downloading {size_mb:.1f} MB via Telethon (msg_id={message_id}, chat={chat_id})...")
+        logger.info(f"Downloading {size_mb:.1f} MB via Telethon Bot (msg_id={message_id}, chat={chat_id})...")
 
         if not message_id or not chat_id:
             logger.error("message_id and chat_id required for Telethon download")
             return False
 
-        # Get the message from the chat via Telethon
+        bot_client = await _get_bot_client()
+        if not bot_client:
+            logger.error("Could not create Telethon bot client")
+            return False
+
+        # Get the message from the chat via bot's own session
         peer = int(chat_id)
-        messages = await client.get_messages(peer, ids=[message_id])
+        messages = await bot_client.get_messages(peer, ids=[message_id])
         if not messages or not messages[0]:
             logger.error(f"Message {message_id} not found in chat {chat_id}")
             return False
@@ -121,22 +123,49 @@ async def _tg_download_via_telethon(file_id: str, dest_path: str, file_size: int
             logger.error(f"Message {message_id} has no media")
             return False
 
-        # Download media via Telethon (supports up to 2 GB)
-        downloaded = await client.download_media(msg, file=dest_path)
+        # Download media via Telethon MTProto (supports up to 2 GB)
+        downloaded = await bot_client.download_media(msg, file=dest_path)
         if downloaded and Path(downloaded).exists():
             actual_size = Path(downloaded).stat().st_size / (1024 * 1024)
-            logger.info(f"Downloaded {actual_size:.1f} MB via Telethon -> {downloaded}")
-            # Rename if Telethon saved with different name
+            logger.info(f"Downloaded {actual_size:.1f} MB via Telethon Bot -> {downloaded}")
             if str(downloaded) != dest_path:
                 Path(downloaded).rename(dest_path)
             return True
 
-        logger.error("Telethon download returned None")
+        logger.error("Telethon bot download returned None")
         return False
 
     except Exception as e:
-        logger.error(f"Telethon download error: {e}", exc_info=True)
+        logger.error(f"Telethon bot download error: {e}", exc_info=True)
         return False
+
+
+# Singleton Telethon bot client
+_bot_client = None
+_bot_client_lock = asyncio.Lock()
+
+
+async def _get_bot_client():
+    """Get or create Telethon client authenticated as the bot."""
+    global _bot_client
+
+    async with _bot_client_lock:
+        if _bot_client and _bot_client.is_connected():
+            return _bot_client
+
+        from app.config import TELEGRAM_API_ID, TELEGRAM_API_HASH
+        from telethon import TelegramClient
+        from telethon.sessions import MemorySession
+
+        if not TELEGRAM_API_ID or not TELEGRAM_API_HASH or not TELEGRAM_BOT_TOKEN:
+            logger.error("TELEGRAM_API_ID/HASH/BOT_TOKEN not configured")
+            return None
+
+        client = TelegramClient(MemorySession(), TELEGRAM_API_ID, TELEGRAM_API_HASH)
+        await client.start(bot_token=TELEGRAM_BOT_TOKEN)
+        _bot_client = client
+        logger.info("Telethon bot client connected")
+        return _bot_client
 
 
 # ──────────────── Media extraction ────────────────
