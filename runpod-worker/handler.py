@@ -81,6 +81,7 @@ def handler(job):
             audio_path,
             language=language,
             beam_size=beam_size,
+            condition_on_previous_text=False,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
         )
