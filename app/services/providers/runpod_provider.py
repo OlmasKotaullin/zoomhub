@@ -44,16 +44,16 @@ class RunPodWhisperProvider(TranscriptionProvider):
     async def transcribe(self, file_path: str, user_id: int | None = None) -> dict:
         """Transcribe audio via RunPod Serverless endpoint."""
 
-        # Step 1: Compress audio
-        send_path = await self._compress_audio(file_path)
-        compressed = send_path != file_path
+        # Skip compression — RunPod has fast network, original file downloads in seconds.
+        # Compressing on Fly.io shared CPU takes 2-4 min and saves only ~30s of download.
+        send_path = file_path
+        compressed = False
 
         try:
             file_size = Path(send_path).stat().st_size
             size_mb = file_size / (1024 * 1024)
 
-            # Step 2: Always use URL — serve file via ZoomHub's temp endpoint
-            # base64 fails for files >7MB due to RunPod 10MB payload limit
+            # Serve file via ZoomHub's temp endpoint — RunPod downloads by URL
             audio_url = await self._get_serve_url(send_path)
             logger.info(f"RunPod transcription: {size_mb:.1f} MB, URL ready")
             payload = {
