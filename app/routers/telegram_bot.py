@@ -50,7 +50,8 @@ async def _tg_send(chat_id: str, text: str, parse_mode: str = "Markdown",
     return await _tg_api("sendMessage", **payload)
 
 
-async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0) -> bool:
+async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0,
+                            message_id: int = 0, chat_id: str = "") -> bool:
     """Download file from Telegram by file_id.
 
     Files <= 20 MB: Bot API getFile (fast).
@@ -60,7 +61,8 @@ async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0) ->
 
     if file_size > _TG_MAX_DOWNLOAD:
         # Large file — use Telethon (already running on server for Bukvitsa)
-        return await _tg_download_via_telethon(file_id, dest_path, file_size)
+        return await _tg_download_via_telethon(file_id, dest_path, file_size,
+                                                message_id=message_id, chat_id=chat_id)
 
     # Small file — Bot API
     result = await _tg_api("getFile", file_id=file_id)
@@ -74,7 +76,8 @@ async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0) ->
 
     # Bot API may report larger size than initial estimate
     if actual_size > _TG_MAX_DOWNLOAD:
-        return await _tg_download_via_telethon(file_id, dest_path, actual_size)
+        return await _tg_download_via_telethon(file_id, dest_path, actual_size,
+                                                message_id=message_id, chat_id=chat_id)
 
     download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{tg_file_path}"
     async with httpx.AsyncClient(timeout=300) as client:
@@ -88,52 +91,47 @@ async def _tg_download_file(file_id: str, dest_path: str, file_size: int = 0) ->
     return True
 
 
-async def _tg_download_via_telethon(file_id: str, dest_path: str, file_size: int = 0) -> bool:
-    """Download large file via Telethon (up to 2 GB)."""
+async def _tg_download_via_telethon(file_id: str, dest_path: str, file_size: int = 0,
+                                     message_id: int = 0, chat_id: str = "") -> bool:
+    """Download large file via Telethon MTProto (up to 2 GB).
+
+    Uses the bot's Telethon userbot session to download from the chat
+    where the message was sent. Requires message_id and chat_id.
+    """
     try:
         from app.services.providers.bukvitsa_provider import _get_client
 
         client = await _get_client()
         size_mb = file_size / (1024 * 1024)
-        logger.info(f"Downloading {size_mb:.1f} MB via Telethon...")
+        logger.info(f"Downloading {size_mb:.1f} MB via Telethon (msg_id={message_id}, chat={chat_id})...")
 
-        # Get the bot's incoming message with this file
-        # We need to find the message by iterating recent messages from the user
-        # Simpler: use client.download_media with the message object
-        # But we only have file_id. Use Bot API to get message_id from update.
-
-        # Alternative: use Telethon's download_file with InputDocument
-        # For this we need access_hash which Bot API doesn't provide.
-        # Simplest approach: download via bot's get_file but with Telethon's MTProto
-        from telethon.tl.functions.upload import GetFileRequest
-        from telethon.tl.types import InputDocumentFileLocation
-
-        # Get file info from Bot API (works even for >20MB — gives us file_path)
-        result = await _tg_api("getFile", file_id=file_id)
-        file_info = result.get("result", {})
-        tg_file_path = file_info.get("file_path", "")
-
-        if not tg_file_path:
-            logger.error("Cannot get file_path from Bot API for Telethon download")
+        if not message_id or not chat_id:
+            logger.error("message_id and chat_id required for Telethon download")
             return False
 
-        # Download directly via HTTP with streaming (bypasses 20MB getFile limit)
-        download_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{tg_file_path}"
-        async with httpx.AsyncClient(timeout=600) as http_client:
-            async with http_client.stream("GET", download_url) as resp:
-                if resp.status_code == 200:
-                    with open(dest_path, "wb") as f:
-                        async for chunk in resp.aiter_bytes(chunk_size=1024 * 1024):
-                            f.write(chunk)
-                    size_mb = Path(dest_path).stat().st_size / (1024 * 1024)
-                    logger.info(f"Downloaded {size_mb:.1f} MB via streaming -> {dest_path}")
-                    return True
-                else:
-                    logger.warning(f"Bot API streaming failed ({resp.status_code}), trying Telethon direct")
+        # Get the message from the chat via Telethon
+        peer = int(chat_id)
+        messages = await client.get_messages(peer, ids=[message_id])
+        if not messages or not messages[0]:
+            logger.error(f"Message {message_id} not found in chat {chat_id}")
+            return False
 
-        # Fallback: download via Telethon by forwarding message to self
-        # This is complex — for now, suggest web upload
-        logger.error("Could not download large file")
+        msg = messages[0]
+        if not msg.media:
+            logger.error(f"Message {message_id} has no media")
+            return False
+
+        # Download media via Telethon (supports up to 2 GB)
+        downloaded = await client.download_media(msg, file=dest_path)
+        if downloaded and Path(downloaded).exists():
+            actual_size = Path(downloaded).stat().st_size / (1024 * 1024)
+            logger.info(f"Downloaded {actual_size:.1f} MB via Telethon -> {downloaded}")
+            # Rename if Telethon saved with different name
+            if str(downloaded) != dest_path:
+                Path(downloaded).rename(dest_path)
+            return True
+
+        logger.error("Telethon download returned None")
         return False
 
     except Exception as e:
@@ -220,8 +218,9 @@ async def telegram_webhook(request: Request):
 
     # Handle media (audio, video, voice, document)
     file_id, filename, file_size = _extract_media(message)
+    message_id = message.get("message_id", 0)
     if file_id:
-        asyncio.create_task(_handle_media(chat_id, file_id, filename, file_size))
+        asyncio.create_task(_handle_media(chat_id, file_id, filename, file_size, message_id=message_id))
         return {"ok": True}
 
     # Text message — not supported yet
@@ -305,7 +304,7 @@ async def _handle_help(chat_id: str):
 
 # ──────────────── Media processing ────────────────
 
-async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: int):
+async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
     """Download media from Telegram, create Meeting, run pipeline."""
     db = SessionLocal()
     try:
@@ -364,7 +363,8 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
         meeting_dir.mkdir(parents=True, exist_ok=True)
         file_path = meeting_dir / f"original{ext}"
 
-        success = await _tg_download_file(file_id, str(file_path), file_size=file_size)
+        success = await _tg_download_file(file_id, str(file_path), file_size=file_size,
+                                          message_id=message_id, chat_id=chat_id)
         if not success:
             meeting.status = MeetingStatus.error
             meeting.error_message = "Не удалось скачать файл из Telegram"
