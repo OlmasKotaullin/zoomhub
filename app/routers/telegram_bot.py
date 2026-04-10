@@ -32,6 +32,9 @@ _AUDIO_TYPES = ("audio", "voice", "video", "video_note", "document")
 # Max file size Telegram Bot API can download: 20 MB
 _TG_MAX_DOWNLOAD = 20 * 1024 * 1024
 
+# Chat mode state: {chat_id: {"meeting_id": int, "lock": asyncio.Lock()}}
+_chat_state: dict[str, dict] = {}
+
 
 # ──────────────── Telegram API helpers ────────────────
 
@@ -299,24 +302,36 @@ async def telegram_webhook(request: Request):
     if not chat_id:
         return {"ok": True}
 
-    # Handle /start command (account linking)
+    # Priority 1: Commands (any mode)
     if text.startswith("/start"):
+        _chat_state.pop(chat_id, None)
         await _handle_start(chat_id, text)
         return {"ok": True}
 
-    # Handle /help command
     if text.startswith("/help"):
         await _handle_help(chat_id)
         return {"ok": True}
 
-    # Handle media (audio, video, voice, document)
+    if text == "/exit":
+        if chat_id in _chat_state:
+            _chat_state.pop(chat_id, None)
+            await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
+        return {"ok": True}
+
+    # Priority 2: Media ALWAYS takes priority (exits chat mode)
     file_id, filename, file_size = _extract_media(message)
     message_id = message.get("message_id", 0)
     if file_id:
+        _chat_state.pop(chat_id, None)  # exit chat mode if active
         asyncio.create_task(_handle_media(chat_id, file_id, filename, file_size, message_id=message_id))
         return {"ok": True}
 
-    # Text message — not supported yet
+    # Priority 3: Text in chat mode → AI question
+    if text and chat_id in _chat_state:
+        asyncio.create_task(_handle_chat_message(chat_id, text))
+        return {"ok": True}
+
+    # Priority 4: Text without chat mode → hint
     if text and not text.startswith("/"):
         await _tg_send(
             chat_id,
@@ -618,7 +633,7 @@ async def _send_result(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
         keyboard = {"inline_keyboard": [
             [
                 {"text": "📄 Транскрипт .txt", "callback_data": f"dl:{mid}:txt"},
-                {"text": "💬 AI-чат", "url": f"{APP_URL}/meetings/{mid}#chat"},
+                {"text": "💬 AI-чат", "callback_data": f"chat:{mid}"},
             ],
             [
                 {"text": "🌐 Открыть на сайте", "url": f"{APP_URL}/meetings/{mid}"},
@@ -666,8 +681,139 @@ async def _handle_callback(callback: dict):
 
         if action == "dl":
             await _handle_download(chat_id, meeting, extra)
+        elif action == "chat":
+            await _enter_chat_mode(chat_id, meeting, user)
+        elif action == "exit":
+            _chat_state.pop(chat_id, None)
+            await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
     finally:
         db.close()
+
+
+# ──────────────── Chat mode ────────────────
+
+async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
+    """Enter AI chat mode for a specific meeting."""
+    if not meeting.transcript or not meeting.transcript.full_text:
+        await _tg_send(chat_id, "Транскрипт ещё не готов. Подождите завершения обработки.")
+        return
+
+    # Set chat state with lock for race condition protection
+    old_meeting = _chat_state.get(chat_id, {}).get("meeting_id")
+    _chat_state[chat_id] = {
+        "meeting_id": meeting.id,
+        "user_id": user.id,
+        "lock": _chat_state.get(chat_id, {}).get("lock") or asyncio.Lock(),
+    }
+
+    title = meeting.title or "Запись"
+    msg = f"💬 *AI-чат по записи:* {title}\n\n"
+    if old_meeting and old_meeting != meeting.id:
+        msg += f"_Переключился с другой записи._\n\n"
+    msg += (
+        "Задайте вопрос — отвечу по транскрипту.\n\n"
+        "Примеры:\n"
+        "• _Какие задачи обсуждали?_\n"
+        "• _Что решили по бюджету?_\n"
+        "• _Составь протокол встречи_\n\n"
+        "Для выхода: /exit или отправьте новый файл."
+    )
+
+    await _tg_send(chat_id, msg, reply_markup={"inline_keyboard": [
+        [{"text": "❌ Завершить чат", "callback_data": f"exit:{meeting.id}"}],
+    ]})
+
+
+async def _handle_chat_message(chat_id: str, text: str):
+    """Handle text message in chat mode — send to AI."""
+    state = _chat_state.get(chat_id)
+    if not state:
+        return
+
+    meeting_id = state["meeting_id"]
+    user_id = state["user_id"]
+    lock = state.get("lock") or asyncio.Lock()
+
+    async with lock:  # prevent race conditions on parallel messages
+        # Show typing indicator
+        await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
+
+        db = SessionLocal()
+        try:
+            meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+            if not meeting or not meeting.transcript:
+                _chat_state.pop(chat_id, None)
+                await _tg_send(chat_id, "Встреча не найдена. Чат завершён.")
+                return
+
+            from app.models import ChatMessage, ChatRole
+
+            # Save user question
+            db.add(ChatMessage(
+                user_id=user_id, meeting_id=meeting_id,
+                role=ChatRole.user, content=text,
+            ))
+            db.commit()
+
+            # Get history
+            history = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.meeting_id == meeting_id, ChatMessage.user_id == user_id)
+                .order_by(ChatMessage.created_at)
+                .all()
+            )
+
+            # Call AI
+            from app.services.chat_engine import ask_about_meeting
+            answer = await ask_about_meeting(meeting, history)
+
+            # Save AI answer
+            db.add(ChatMessage(
+                user_id=user_id, meeting_id=meeting_id,
+                role=ChatRole.assistant, content=answer,
+            ))
+            db.commit()
+
+            # Send answer (may be long)
+            await _send_long_message(chat_id, answer, reply_markup={"inline_keyboard": [
+                [{"text": "❌ Завершить чат", "callback_data": f"exit:{meeting_id}"}],
+            ]})
+
+        except Exception as e:
+            logger.error(f"Chat error for meeting {meeting_id}: {e}", exc_info=True)
+            await _tg_send(chat_id, f"Ошибка AI-чата: {str(e)[:200]}")
+        finally:
+            db.close()
+
+
+async def _send_long_message(chat_id: str, text: str, parse_mode: str = "Markdown",
+                             reply_markup: dict | None = None):
+    """Send long text, splitting into 4000-char chunks if needed."""
+    MAX_LEN = 4000
+
+    if len(text) <= MAX_LEN:
+        return await _tg_send(chat_id, text, parse_mode=parse_mode,
+                              reply_markup=reply_markup)
+
+    # Split by paragraphs
+    chunks = []
+    current = ""
+    for para in text.split("\n\n"):
+        if len(current) + len(para) + 2 > MAX_LEN:
+            if current:
+                chunks.append(current.strip())
+            current = para if len(para) <= MAX_LEN else para[:MAX_LEN]
+        else:
+            current = current + "\n\n" + para if current else para
+    if current:
+        chunks.append(current.strip())
+
+    for i, chunk in enumerate(chunks):
+        is_last = i == len(chunks) - 1
+        markup = reply_markup if is_last else None
+        await _tg_send(chat_id, chunk, parse_mode=parse_mode, reply_markup=markup)
+        if not is_last:
+            await asyncio.sleep(0.3)
 
 
 # ──────────────── File generation ────────────────
