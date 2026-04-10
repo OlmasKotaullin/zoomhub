@@ -107,6 +107,15 @@ def _get_user_id(meeting_id: int) -> int | None:
         db.close()
 
 
+def _get_meeting_source(meeting_id: int) -> str | None:
+    db = SessionLocal()
+    try:
+        m = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        return m.source.value if m and m.source else None
+    finally:
+        db.close()
+
+
 async def process_meeting(meeting_id: int, download_url: str | None = None, access_token: str | None = None):
     """Фоновая обработка записи: скачивание → транскрибация → конспект."""
     try:
@@ -175,7 +184,10 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
 
         # Готово
         _update_status(meeting_id, MeetingStatus.ready)
-        asyncio.create_task(notify_user(meeting_id))
+        # Skip notify for telegram-source meetings — telegram_bot.py sends its own result
+        source = _get_meeting_source(meeting_id)
+        if source != "telegram":
+            asyncio.create_task(notify_user(meeting_id))
         logger.info(f"[{meeting_id}] Обработка завершена успешно")
 
     except Exception as e:
