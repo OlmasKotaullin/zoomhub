@@ -95,7 +95,7 @@
 
 <!-- Tabs -->
 <div class="border-b border-g-100 mb-6 anim-up" style="animation-delay:0.12s">
-  <nav class="flex gap-6 -mb-px">
+  <nav class="flex flex-wrap gap-3 md:gap-6 -mb-px">
     <button onclick="showTab('summary')" id="tab-summary" class="tab-btn pb-3 text-[13px] font-semibold border-b-2 border-zoom text-zoom">Конспект</button>
     <button onclick="showTab('transcript')" id="tab-transcript" class="tab-btn pb-3 text-[13px] font-semibold border-b-2 border-transparent text-g-400 hover:text-g-700 transition">Транскрипт</button>
     <button onclick="showTab('chat')" id="tab-chat" class="tab-btn pb-3 text-[13px] font-semibold border-b-2 border-transparent text-g-400 hover:text-g-700 transition">
@@ -202,7 +202,7 @@
     </div>
 
     <!-- Шаблоны — ВСЕГДА ВНИЗУ, перед input -->
-    <div id="suggestedPrompts" class="grid grid-cols-2 gap-2 mb-4">
+    <div id="suggestedPrompts" class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
       <button onclick="askTemplate('follow_up', 'На основании транскрипта ЭТОЙ встречи определи конкретные задачи, ответственных (используй реальные имена из транскрипта) и следующие шаги. Не выдумывай — только то, что реально обсуждалось.')"
         class="text-left p-3 rounded-xl bg-g-50 hover:bg-zoom-light text-g-600 hover:text-zoom transition-colors duration-200 group">
         <span class="flex items-center gap-2 text-[12px] font-semibold">

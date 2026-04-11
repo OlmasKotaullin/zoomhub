@@ -9,7 +9,7 @@
 
 <!-- Dashboard Stats -->
 {% if stats.total > 0 %}
-<div class="grid grid-cols-4 gap-3 mt-6 anim-up" style="animation-delay:0.03s">
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 anim-up" style="animation-delay:0.03s">
   <div class="z-card px-4 py-3">
     <p class="text-[22px] font-extrabold text-g-800">{{ stats.total }}</p>
     <p class="text-[11px] text-g-400 font-medium mt-0.5">Всего встреч</p>
@@ -29,7 +29,7 @@
 </div>
 {% endif %}
 
-<div class="flex gap-2 mt-6 mb-6 anim-up" style="animation-delay:0.05s" id="statusFilters">
+<div class="flex flex-wrap gap-2 mt-6 mb-6 anim-up" style="animation-delay:0.05s" id="statusFilters">
   <button onclick="filterBy('all', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-primary rounded-full">Все</button>
   <button onclick="filterBy('ready', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-ghost rounded-full">Готовые</button>
   <button onclick="filterBy('transcribing', this)" class="filter-btn z-btn text-[12px] px-4 py-2 z-btn-ghost rounded-full">В обработке</button>

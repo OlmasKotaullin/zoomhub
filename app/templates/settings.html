@@ -17,7 +17,7 @@
       {% else %}<span class="text-[11px] font-semibold text-err bg-err/10 px-2.5 py-1 rounded-full">Не доступен</span>{% endif %}
     </div>
     <p class="text-[13px] text-g-500 mb-3">Используется для саммари встреч и AI-чата.</p>
-    <div class="flex gap-2 mb-3">
+    <div class="flex flex-wrap gap-2 mb-3">
       <button onclick="switchLLM('auto')" id="btn-llm-auto"
         class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
           {{ 'bg-zoom text-white border-zoom' if llm_provider == 'auto' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">
@@ -152,7 +152,7 @@
       {% else %}<span class="text-[11px] font-semibold text-warn bg-warn/10 px-2.5 py-1 rounded-full">Не подключено</span>{% endif %}
     </div>
     <p class="text-[13px] text-g-500 mb-3">Преобразование аудио в текст.</p>
-    <div class="flex gap-2 mb-3">
+    <div class="flex flex-wrap gap-2 mb-3">
       <button onclick="switchTranscription('openai_whisper')" id="btn-trans-openai_whisper"
         class="text-[12px] font-semibold px-4 py-2 rounded-xl border transition
           {{ 'bg-zoom text-white border-zoom' if transcription_provider == 'openai_whisper' else 'bg-white text-g-600 border-g-200 hover:border-zoom hover:text-zoom' }}">

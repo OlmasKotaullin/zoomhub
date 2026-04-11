@@ -22,7 +22,7 @@
 
   <!-- TAB: Dashboard -->
   {% if tab == 'dashboard' %}
-  <div class="grid grid-cols-4 gap-3">
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
     <div class="z-card px-4 py-3">
       <p class="text-[22px] font-extrabold text-zoom">{{ total_users }}</p>
       <p class="text-[11px] text-g-400 font-medium">Пользователей</p>
@@ -42,7 +42,7 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-3 gap-3">
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
     <div class="z-card px-4 py-3">
       <p class="text-[18px] font-bold">{{ meetings_week }}</p>
       <p class="text-[11px] text-g-400">За неделю</p>
@@ -88,8 +88,8 @@
 
   <!-- TAB: Users -->
   {% elif tab == 'users' %}
-  <div class="z-card overflow-hidden">
-    <table class="w-full text-[12px]">
+  <div class="z-card overflow-x-auto">
+    <table class="w-full text-[12px] min-w-[600px]">
       <thead>
         <tr class="bg-g-50 text-g-500 text-left">
           <th class="px-4 py-3 font-semibold">Пользователь</th>
@@ -224,8 +224,8 @@
     <button type="submit" class="z-btn z-btn-primary px-5 py-2.5 text-[13px]">Создать код</button>
   </form>
 
-  <div class="z-card overflow-hidden">
-    <table class="w-full text-[12px]">
+  <div class="z-card overflow-x-auto">
+    <table class="w-full text-[12px] min-w-[600px]">
       <thead>
         <tr class="bg-g-50 text-g-500 text-left">
           <th class="px-4 py-3 font-semibold">Код</th>

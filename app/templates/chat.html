@@ -12,7 +12,7 @@
 
   <!-- Область сообщений -->
   <div id="chatScroll" class="flex-1 overflow-y-auto">
-    <div class="max-w-3xl mx-auto px-6 pt-6 pb-4">
+    <div class="max-w-3xl mx-auto px-3 md:px-6 pt-4 md:pt-6 pb-4">
 
       <!-- Welcome (скрывается при первом сообщении) -->
       <div id="chatWelcome" class="text-center pt-12 pb-8">
@@ -27,7 +27,7 @@
           'tasks': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>',
           'daily': '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>'
         } %}
-        <div class="grid grid-cols-3 gap-2.5 max-w-2xl mx-auto">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-w-2xl mx-auto">
           {% for key, t in chat_templates.items() %}
           <button onclick='selectTemplate({{ key|tojson }}, {{ t.name|tojson }}, {{ t.prompt|tojson }})'
             class="text-left z-card p-3.5 hover:border-zoom/30 hover:shadow-card-hover transition-all duration-200 group">
@@ -60,7 +60,7 @@
 
   <!-- Поле ввода (прибито к низу) -->
   <div class="border-t border-g-100 bg-white flex-shrink-0">
-    <div class="max-w-3xl mx-auto px-6 py-3">
+    <div class="max-w-3xl mx-auto px-3 md:px-6 py-3">
       <div class="z-card p-3">
         <div id="contextTags" class="flex flex-wrap gap-1.5 mb-2 empty:mb-0"></div>
         <textarea id="chatInput" rows="1" placeholder="Напишите сообщение..." aria-label="Сообщение AI-ассистенту"
