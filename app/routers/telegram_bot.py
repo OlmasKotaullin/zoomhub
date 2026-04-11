@@ -36,6 +36,25 @@ _TG_MAX_DOWNLOAD = 20 * 1024 * 1024
 # Pending media for protective intercept in chat mode
 _pending_media: dict[str, dict] = {}
 
+# Last command response message ID per chat (to delete on next command)
+_last_cmd_msg: dict[str, int] = {}
+
+
+async def _tg_send_cmd(chat_id: str, text: str, **kwargs) -> dict | None:
+    """Send a command response and remember its ID for cleanup on next command."""
+    # Delete previous command response
+    old_msg_id = _last_cmd_msg.pop(chat_id, None)
+    if old_msg_id:
+        try:
+            await _tg_api("deleteMessage", chat_id=chat_id, message_id=old_msg_id)
+        except Exception:
+            pass  # message may already be deleted or too old
+
+    result = await _tg_send(chat_id, text, **kwargs)
+    if result and result.get("ok") and result.get("result", {}).get("message_id"):
+        _last_cmd_msg[chat_id] = result["result"]["message_id"]
+    return result
+
 # Chat mode state: in-memory locks + DB-backed meeting_id
 _chat_locks: dict[str, asyncio.Lock] = {}  # per-chat locks for race condition protection
 
@@ -425,9 +444,9 @@ async def telegram_webhook(request: Request):
     if text == "/exit":
         if in_chat:
             _set_chat_meeting_id(chat_id, None)
-            await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
+            await _tg_send_cmd(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
         else:
-            await _tg_send(chat_id, "Вы не в AI-чате. Отправьте аудио для транскрипции.")
+            await _tg_send_cmd(chat_id, "Вы не в AI-чате. Отправьте аудио для транскрипции.")
         return {"ok": True}
 
     if text.startswith("/plan"):
@@ -550,7 +569,7 @@ async def _handle_start(chat_id: str, text: str):
 
 async def _handle_help(chat_id: str):
     """Send help message."""
-    await _tg_send(
+    await _tg_send_cmd(
         chat_id,
         "*ZoomHub — рабочая память встреч*\n\n"
         "Отправьте аудио или видео — получите:\n"
@@ -599,7 +618,7 @@ async def _handle_plan(chat_id: str):
             msg += f"*AI-чат:* безлимит\n"
             msg += f"*Шаблоны:* безлимит\n"
 
-        await _tg_send(chat_id, msg)
+        await _tg_send_cmd(chat_id, msg)
     finally:
         db.close()
 
@@ -641,7 +660,7 @@ async def _handle_meetings(chat_id: str):
 
         buttons.append([{"text": "🌐 Все записи на сайте", "url": f"{APP_URL}/meetings"}])
 
-        await _tg_send(chat_id, msg, reply_markup={"inline_keyboard": buttons})
+        await _tg_send_cmd(chat_id, msg, reply_markup={"inline_keyboard": buttons})
     finally:
         db.close()
 
