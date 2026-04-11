@@ -462,6 +462,10 @@ async def telegram_webhook(request: Request):
         await _handle_web(chat_id)
         return {"ok": True}
 
+    if text.startswith("/invite"):
+        await _handle_invite(chat_id, text)
+        return {"ok": True}
+
     if text.startswith("/meetings"):
         await _handle_meetings(chat_id)
         return {"ok": True}
@@ -729,6 +733,38 @@ async def _handle_plan(chat_id: str):
             msg += f"*Шаблоны:* безлимит\n"
 
         await _tg_send_cmd(chat_id, msg)
+    finally:
+        db.close()
+
+
+async def _handle_invite(chat_id: str, text: str):
+    """Admin-only: create invite codes. Usage: /invite 5"""
+    db = SessionLocal()
+    try:
+        user = _find_user_by_chat_id(chat_id, db)
+        if not user or not user.is_admin:
+            await _tg_send(chat_id, "Эта команда доступна только администратору.")
+            return
+
+        import secrets as _sec
+        from app.models import InviteCode
+
+        # Parse count: /invite 5 → 5 codes, /invite → 1 code
+        parts = text.split()
+        count = min(int(parts[1]), 20) if len(parts) > 1 and parts[1].isdigit() else 1
+
+        codes = []
+        for _ in range(count):
+            code = f"ZH-{_sec.token_hex(3).upper()}"
+            db.add(InviteCode(code=code, max_uses=1, is_active=True, owner_id=user.id))
+            codes.append(code)
+        db.commit()
+
+        lines = [f"🔑 *{count} инвайт-ссылок:*\n"]
+        for c in codes:
+            lines.append(f"`https://t.me/ZoomHub_notify_bot?start={c}`")
+
+        await _tg_send_cmd(chat_id, "\n".join(lines))
     finally:
         db.close()
 

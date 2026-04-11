@@ -340,7 +340,7 @@
       {% for inv in user_invites %}
       <div class="flex items-center justify-between bg-g-50 rounded-xl px-4 py-3">
         <div class="flex items-center gap-3">
-          <code class="text-[14px] font-mono font-bold text-zoom tracking-wider">{{ inv.code }}</code>
+          <code class="text-[13px] font-mono font-bold text-zoom tracking-wider">{{ inv.code }}</code>
           {% if inv.used_count >= inv.max_uses %}
             <span class="text-[10px] font-semibold text-g-400 bg-g-200 px-2 py-0.5 rounded-full">Использован</span>
           {% else %}
@@ -351,7 +351,7 @@
           {% if inv.used_count >= inv.max_uses and inv.used_by %}
             <span class="text-[11px] text-g-400">→ {{ inv.used_by.name }}</span>
           {% elif inv.used_count < inv.max_uses %}
-            <button onclick="copyInvite('{{ inv.code }}')" class="text-[11px] text-zoom hover:underline">Скопировать</button>
+            <button onclick="copyInvite('{{ inv.code }}')" class="text-[11px] text-zoom hover:underline">Скопировать ссылку</button>
           {% endif %}
         </div>
       </div>
@@ -459,9 +459,10 @@ function generateAgentToken() {
 }
 
 function copyInvite(code) {
-  navigator.clipboard.writeText(code).then(() => {
+  const link = 'https://t.me/ZoomHub_notify_bot?start=' + code;
+  navigator.clipboard.writeText(link).then(() => {
     event.target.textContent = 'Скопировано!';
-    setTimeout(() => { event.target.textContent = 'Скопировать'; }, 2000);
+    setTimeout(() => { event.target.textContent = 'Скопировать ссылку'; }, 2000);
   });
 }
 
