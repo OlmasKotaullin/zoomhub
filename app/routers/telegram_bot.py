@@ -984,14 +984,28 @@ async def _handle_callback(callback: dict):
         elif action == "chat":
             await _enter_chat_mode(chat_id, meeting, user)
         elif action == "tpl":
-            # Template button pressed — enter chat mode if not already, then run template
+            # Template button pressed
             template_key = extra
             tpl = _TG_TEMPLATES.get(template_key)
             if not tpl:
                 return
             if not _is_in_chat(chat_id):
                 _set_chat_meeting_id(chat_id, meeting.id)
-            asyncio.create_task(_handle_chat_message(chat_id, tpl["prompt"], is_template=True))
+
+            # Delete previous template response (reduce clutter)
+            old_msg = _last_template_msg.pop(chat_id, None)
+            if old_msg:
+                try:
+                    await _tg_api("deleteMessage", chat_id=chat_id, message_id=old_msg)
+                except Exception:
+                    pass
+
+            # Send placeholder immediately (prevents "frozen" feeling)
+            placeholder = await _tg_send(chat_id, f"⏳ Формирую {tpl['name'].lower()}...")
+            placeholder_id = placeholder.get("result", {}).get("message_id") if placeholder else None
+
+            asyncio.create_task(_handle_template_response(
+                chat_id, tpl["prompt"], meeting.id, placeholder_id))
         elif action == "exit":
             _set_chat_meeting_id(chat_id, None)
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
@@ -1079,28 +1093,54 @@ async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, mes
 
 # ──────────────── Chat mode ────────────────
 
-# Telegram-adapted templates (shorter prompts, no markdown headers)
+# Telegram-adapted templates (2 core buttons)
 _TG_TEMPLATES = {
-    "follow_up": {"name": "Follow Up", "prompt": "Определи все задачи, ответственных и следующие шаги по этой встрече. Используй только факты из транскрипта."},
-    "summary": {"name": "Резюме", "prompt": "Дай структурированное резюме встречи: ключевые темы, решения, задачи. Только факты из транскрипта."},
-    "protocol": {"name": "Протокол", "prompt": "Составь формальный протокол встречи: дата, участники, повестка, решения, задачи с ответственными и сроками. Только факты из транскрипта."},
-    "tasks": {"name": "Трекер задач", "prompt": "Извлеки все задачи из встречи в виде таблицы: номер, ответственный, задача, дедлайн. Только факты из транскрипта."},
+    "tasks": {
+        "name": "Задачи",
+        "prompt": "Извлеки ВСЕ задачи из встречи. Формат: нумерованный список, одна задача = одна строка. Формат строки: «1. Ответственный — Задача (дедлайн)». Если дедлайн не указан — не пиши. ЗАПРЕЩЕНО: markdown-таблицы (символ |). Только факты из транскрипта.",
+    },
+    "summary": {
+        "name": "Резюме",
+        "prompt": "Дай краткое структурированное резюме встречи: ключевые темы, решения, задачи. Списки через •. ЗАПРЕЩЕНО: markdown-таблицы (символ |), заголовки (# ##). Только факты из транскрипта.",
+    },
 }
+
+# Track last template message for cleanup
+_last_template_msg: dict[str, int] = {}
 
 
 def _chat_keyboard(meeting_id: int) -> dict:
-    """Inline keyboard for AI chat mode — templates + exit."""
+    """Inline keyboard for AI chat mode — 2 templates + exit."""
     return {"inline_keyboard": [
         [
-            {"text": "📋 Протокол", "callback_data": f"tpl:{meeting_id}:protocol"},
             {"text": "✅ Задачи", "callback_data": f"tpl:{meeting_id}:tasks"},
-        ],
-        [
-            {"text": "📊 Follow Up", "callback_data": f"tpl:{meeting_id}:follow_up"},
             {"text": "📄 Резюме", "callback_data": f"tpl:{meeting_id}:summary"},
         ],
         [{"text": "❌ Завершить чат", "callback_data": f"exit:{meeting_id}"}],
     ]}
+
+
+async def _handle_template_response(chat_id: str, prompt: str, meeting_id: int,
+                                     placeholder_id: int | None):
+    """Run template, replace placeholder with result, track for cleanup."""
+    try:
+        # Use chat handler with is_template=True (bypasses limits, doesn't count)
+        await _handle_chat_message(chat_id, prompt, is_template=True)
+
+        # Delete placeholder after answer is sent
+        if placeholder_id:
+            try:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=placeholder_id)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"Template error: {e}", exc_info=True)
+        if placeholder_id:
+            try:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=placeholder_id)
+            except Exception:
+                pass
+        await _tg_send(chat_id, "AI-ассистент временно недоступен. Попробуйте через минуту.")
 
 
 async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
@@ -1197,8 +1237,12 @@ async def _handle_chat_message(chat_id: str, text: str, is_template: bool = Fals
             db.commit()
 
             # Send answer with template buttons
-            await _send_long_message(chat_id, answer,
-                                     reply_markup=_chat_keyboard(meeting_id))
+            result = await _send_long_message(chat_id, answer,
+                                              reply_markup=_chat_keyboard(meeting_id))
+
+            # Track template response for cleanup on next template click
+            if is_template and result and result.get("ok"):
+                _last_template_msg[chat_id] = result.get("result", {}).get("message_id", 0)
 
         except Exception as e:
             logger.error(f"Chat error for meeting {meeting_id}: {e}", exc_info=True)
@@ -1236,9 +1280,10 @@ async def _send_long_message(chat_id: str, text: str, parse_mode: str = "Markdow
         if total > 1:
             chunk = f"({i+1}/{total})\n\n{chunk}"
         markup = reply_markup if is_last else None
-        await _tg_send(chat_id, chunk, parse_mode=parse_mode, reply_markup=markup)
+        result = await _tg_send(chat_id, chunk, parse_mode=parse_mode, reply_markup=markup)
         if not is_last:
             await asyncio.sleep(0.3)
+    return result
 
 
 # ──────────────── File generation ────────────────
