@@ -426,6 +426,8 @@ async def telegram_webhook(request: Request):
         if in_chat:
             _set_chat_meeting_id(chat_id, None)
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
+        else:
+            await _tg_send(chat_id, "Вы не в AI-чате. Отправьте аудио для транскрипции.")
         return {"ok": True}
 
     if text.startswith("/plan"):
