@@ -101,8 +101,17 @@
 <body class="bg-zoom-surface text-g-800 min-h-screen">
   {% block body %}
   <div class="flex h-screen">
+    <!-- Mobile header -->
+    <div class="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-g-100 px-4 py-3 flex items-center justify-between">
+      <button onclick="document.getElementById('sidebar').classList.toggle('hidden')" class="p-1">
+        <svg class="w-6 h-6 text-g-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <span class="text-[16px] font-extrabold"><span class="text-zoom">zoom</span><span class="text-g-900">Hub</span></span>
+      <div class="w-6"></div>
+    </div>
+
     <!-- Sidebar -->
-    <aside class="w-[260px] bg-white border-r border-g-100 flex flex-col">
+    <aside id="sidebar" class="hidden md:flex w-[260px] bg-white border-r border-g-100 flex-col fixed md:static inset-0 z-40 pt-14 md:pt-0" onclick="if(window.innerWidth<768)this.classList.add('hidden')">
       <!-- Logo -->
       <div class="px-5 pt-5 pb-3">
         <h1 class="text-[22px] font-extrabold tracking-tight leading-none">
@@ -245,8 +254,8 @@
     </aside>
 
     <!-- Main -->
-    <main class="flex-1 overflow-y-auto relative">
-      <div id="mainContent" class="max-w-[860px] mx-auto px-8 py-8">
+    <main class="flex-1 overflow-y-auto relative pt-14 md:pt-0">
+      <div id="mainContent" class="max-w-[860px] mx-auto px-4 md:px-8 py-6 md:py-8">
         {% block content %}{% endblock %}
       </div>
     </main>
