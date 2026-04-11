@@ -309,32 +309,34 @@ def _check_usage_limit(user: User, db: Session) -> tuple[bool, float, float]:
     return ok, round(used_hours, 1), limit_hours
 
 
-def _check_chat_limit(user: User, db: Session) -> tuple[bool, int, int | None, str | None]:
-    """Check AI chat question limit. Returns (ok, used, limit, warning_text).
+_CHAT_QUESTIONS_FREE = 3   # per meeting for free plan
+_CHAT_QUESTIONS_PAID = None  # unlimited for paid plans
 
-    limit=None means unlimited. Templates don't count.
+
+def _check_chat_limit(meeting: Meeting, user: User) -> tuple[bool, int, int | None, str | None]:
+    """Check AI chat question limit per meeting. Returns (ok, used, limit, warning_text).
+
+    limit=None means unlimited (paid plans). Templates don't count.
     """
-    _reset_month_if_needed(user, db)
+    if user.plan in ("start", "pro"):
+        return True, meeting.chat_questions_used or 0, None, None
 
-    used = user.chat_questions_month or 0
-    limit = user.chat_questions_limit  # None = unlimited (paid plans)
-
-    if limit is None:
-        return True, used, None, None
+    used = meeting.chat_questions_used or 0
+    limit = _CHAT_QUESTIONS_FREE
 
     remaining = limit - used
     if remaining <= 0:
         return False, used, limit, None
 
     warning = None
-    if remaining <= 2:
-        warning = f"Осталось {remaining} из {limit} вопросов AI-чата в этом месяце."
+    if remaining == 1:
+        warning = f"Остался 1 вопрос из {limit} по этой записи."
     return True, used, limit, warning
 
 
-def _increment_chat_usage(user: User, db: Session):
-    """Increment chat question counter AFTER successful AI response."""
-    user.chat_questions_month = (user.chat_questions_month or 0) + 1
+def _increment_chat_usage(meeting: Meeting, db: Session):
+    """Increment per-meeting chat question counter AFTER successful AI response."""
+    meeting.chat_questions_used = (meeting.chat_questions_used or 0) + 1
     db.commit()
 
 
@@ -915,25 +917,23 @@ async def _handle_chat_message(chat_id: str, text: str):
             if not user:
                 return
 
-            # Check AI chat limit (templates bypass this)
-            ok, used, limit, warning = _check_chat_limit(user, db)
-            if not ok:
-                saved_min = used * 3  # ~3 min saved per question
-                await _tg_send(
-                    chat_id,
-                    f"⚡ Вы использовали все {limit} вопросов AI-чата в этом месяце.\n\n"
-                    f"За этот месяц AI-чат сэкономил вам ~{saved_min} мин.\n\n"
-                    f"✅ Транскрипция и конспекты по-прежнему доступны\n"
-                    f"✅ Шаблоны (Протокол, Задачи) работают без ограничений\n\n"
-                    f"Хотите задавать вопросы без ограничений?\n"
-                    f"Тариф Start — 499 ₽/мес",
-                )
-                return
-
             meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
             if not meeting or not meeting.transcript:
                 _set_chat_meeting_id(chat_id, None)
                 await _tg_send(chat_id, "Встреча не найдена. Чат завершён.")
+                return
+
+            # Check per-meeting AI chat limit (templates bypass this)
+            ok, used, limit, warning = _check_chat_limit(meeting, user)
+            if not ok:
+                title = meeting.title or "Запись"
+                await _tg_send(
+                    chat_id,
+                    f"⚡ Вы задали {limit} из {limit} вопросов по записи «{title}».\n\n"
+                    f"✅ Шаблоны (Протокол, Задачи) по-прежнему доступны\n"
+                    f"✅ Другие записи — свой лимит вопросов\n\n"
+                    f"Безлимитный AI-чат — тариф Start, 499 ₽/мес",
+                )
                 return
 
             from app.models import ChatMessage, ChatRole
@@ -957,8 +957,8 @@ async def _handle_chat_message(chat_id: str, text: str):
             from app.services.chat_engine import ask_about_meeting
             answer = await ask_about_meeting(meeting, history, is_telegram=True)
 
-            # Increment counter AFTER successful response
-            _increment_chat_usage(user, db)
+            # Increment per-meeting counter AFTER successful response
+            _increment_chat_usage(meeting, db)
 
             # Append warning if close to limit
             if warning:

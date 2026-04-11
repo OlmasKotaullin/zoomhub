@@ -149,6 +149,8 @@ class Meeting(Base):
     status = Column(Enum(MeetingStatus), default=MeetingStatus.downloading)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
+    # AI chat: per-meeting question counter (free=3, paid=unlimited)
+    chat_questions_used = Column(Integer, default=0)
 
     user = relationship("User", back_populates="meetings")
     folder = relationship("Folder", back_populates="meetings")

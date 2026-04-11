@@ -81,6 +81,8 @@ def init_db():
                 migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS zoom_recording_id VARCHAR(255) UNIQUE")
             if "zoom_meeting_id" not in meeting_cols:
                 migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS zoom_meeting_id VARCHAR(255)")
+            if "chat_questions_used" not in meeting_cols:
+                migrations.append("ALTER TABLE meetings ADD COLUMN IF NOT EXISTS chat_questions_used INTEGER DEFAULT 0")
             if "tg_api_id" not in user_cols:
                 migrations += [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS tg_api_id INTEGER",
