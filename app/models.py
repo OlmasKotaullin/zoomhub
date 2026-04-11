@@ -103,6 +103,8 @@ class User(Base):
     # Onboarding
     onboarding_completed = Column(Boolean, default=False)
     invite_code_id = Column(Integer, ForeignKey("invite_codes.id"), nullable=True)
+    # Telegram AI-chat state (persists across server restarts)
+    current_chat_meeting_id = Column(Integer, nullable=True)
     # Subscription & usage
     plan = Column(String(20), default="free")  # free | start | pro
     plan_hours_limit = Column(Integer, default=4)  # hours per month (free=4, start=30, pro=100)

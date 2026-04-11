@@ -114,6 +114,9 @@ def init_db():
             if "user_openrouter_api_key" not in user_cols:
                 migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS user_openrouter_api_key VARCHAR(500)")
 
+            if "current_chat_meeting_id" not in user_cols:
+                migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS current_chat_meeting_id INTEGER")
+
             if "plan" not in user_cols:
                 migrations += [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'free'",

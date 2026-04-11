@@ -185,6 +185,37 @@ def make_provider_by_name(name: str, user_keys: dict | None = None) -> LLMProvid
     return factory(api_key=key)
 
 
+def get_chat_provider_chain() -> list[LLMProvider]:
+    """Возвращает цепочку провайдеров для AI-чата (основной + fallback).
+
+    Приоритет: качество + контекст + бесплатность.
+    Gemini (900K) → Groq (128K) → Claude (200K) → GigaChat (12K fallback)
+    """
+    from app.config import (
+        GOOGLE_AI_API_KEY, GROQ_API_KEY, ANTHROPIC_API_KEY,
+        GIGACHAT_AUTH_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY,
+    )
+
+    chain = []
+    if GOOGLE_AI_API_KEY:
+        chain.append(_make_gemini())
+    if GROQ_API_KEY:
+        chain.append(_make_groq())
+    if OPENROUTER_API_KEY:
+        chain.append(_make_openrouter())
+    if DEEPSEEK_API_KEY:
+        chain.append(_make_deepseek())
+    if ANTHROPIC_API_KEY:
+        chain.append(_make_claude())
+    if GIGACHAT_AUTH_KEY:
+        chain.append(_make_gigachat())
+
+    if not chain:
+        chain = [_make_ollama()]
+
+    return chain
+
+
 def get_user_keys(user) -> dict:
     """Извлекает пользовательские API-ключи из объекта User."""
     if not user:

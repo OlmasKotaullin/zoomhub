@@ -32,8 +32,38 @@ _AUDIO_TYPES = ("audio", "voice", "video", "video_note", "document")
 # Max file size Telegram Bot API can download: 20 MB
 _TG_MAX_DOWNLOAD = 20 * 1024 * 1024
 
-# Chat mode state: {chat_id: {"meeting_id": int, "lock": asyncio.Lock()}}
-_chat_state: dict[str, dict] = {}
+# Pending media for protective intercept in chat mode
+_pending_media: dict[str, dict] = {}
+
+# Chat mode state: in-memory locks + DB-backed meeting_id
+_chat_locks: dict[str, asyncio.Lock] = {}  # per-chat locks for race condition protection
+
+
+def _get_chat_meeting_id(chat_id: str) -> int | None:
+    """Get active chat meeting_id from DB (persists across restarts)."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_chat_id == chat_id).first()
+        return user.current_chat_meeting_id if user else None
+    finally:
+        db.close()
+
+
+def _set_chat_meeting_id(chat_id: str, meeting_id: int | None):
+    """Set/clear active chat meeting_id in DB."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.telegram_chat_id == chat_id).first()
+        if user:
+            user.current_chat_meeting_id = meeting_id
+            db.commit()
+    finally:
+        db.close()
+
+
+def _is_in_chat(chat_id: str) -> bool:
+    """Check if user is in AI chat mode."""
+    return _get_chat_meeting_id(chat_id) is not None
 
 
 # ──────────────── Telegram API helpers ────────────────
@@ -302,9 +332,11 @@ async def telegram_webhook(request: Request):
     if not chat_id:
         return {"ok": True}
 
+    in_chat = _is_in_chat(chat_id)
+
     # Priority 1: Commands (any mode)
     if text.startswith("/start"):
-        _chat_state.pop(chat_id, None)
+        _set_chat_meeting_id(chat_id, None)
         await _handle_start(chat_id, text)
         return {"ok": True}
 
@@ -313,8 +345,8 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     if text == "/exit":
-        if chat_id in _chat_state:
-            _chat_state.pop(chat_id, None)
+        if in_chat:
+            _set_chat_meeting_id(chat_id, None)
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
         return {"ok": True}
 
@@ -322,17 +354,27 @@ async def telegram_webhook(request: Request):
     file_id, filename, file_size = _extract_media(message)
     message_id = message.get("message_id", 0)
     if file_id:
-        if chat_id in _chat_state and "voice" in message:
+        if in_chat and "voice" in message:
             # Voice in chat mode → transcribe and send as AI question
             asyncio.create_task(_handle_voice_question(chat_id, file_id, file_size, message_id))
             return {"ok": True}
-        # Regular media → new recording (exit chat mode)
-        _chat_state.pop(chat_id, None)
+        if in_chat:
+            # Non-voice media in chat mode → ask user what to do (protective intercept)
+            # Store pending file info for callback
+            _pending_media[chat_id] = {"file_id": file_id, "filename": filename,
+                                        "file_size": file_size, "message_id": message_id}
+            await _tg_send(chat_id, "Вы отправили файл. Что сделать?",
+                           reply_markup={"inline_keyboard": [
+                               [{"text": "📝 Новая транскрипция", "callback_data": "media_new"}],
+                               [{"text": "↩️ Остаться в чате", "callback_data": "media_stay"}],
+                           ]})
+            return {"ok": True}
+        # Not in chat → new recording
         asyncio.create_task(_handle_media(chat_id, file_id, filename, file_size, message_id=message_id))
         return {"ok": True}
 
     # Priority 3: Text in chat mode → AI question
-    if text and chat_id in _chat_state:
+    if text and in_chat:
         asyncio.create_task(_handle_chat_message(chat_id, text))
         return {"ok": True}
 
@@ -662,6 +704,20 @@ async def _handle_callback(callback: dict):
     # Acknowledge immediately (removes loading spinner)
     await _tg_api("answerCallbackQuery", callback_query_id=cb_id)
 
+    # Handle media intercept callbacks (no meeting_id in pattern)
+    if data == "media_new":
+        pending = _pending_media.pop(chat_id, None)
+        if pending:
+            _set_chat_meeting_id(chat_id, None)
+            asyncio.create_task(_handle_media(
+                chat_id, pending["file_id"], pending["filename"],
+                pending["file_size"], message_id=pending["message_id"]))
+        return
+    if data == "media_stay":
+        _pending_media.pop(chat_id, None)
+        await _tg_send(chat_id, "Продолжаем. Задайте вопрос по записи.")
+        return
+
     match = CALLBACK_PATTERN.match(data)
     if not match:
         return
@@ -689,7 +745,7 @@ async def _handle_callback(callback: dict):
         elif action == "chat":
             await _enter_chat_mode(chat_id, meeting, user)
         elif action == "exit":
-            _chat_state.pop(chat_id, None)
+            _set_chat_meeting_id(chat_id, None)
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
     finally:
         db.close()
@@ -781,13 +837,9 @@ async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
         await _tg_send(chat_id, "Транскрипт ещё не готов. Подождите завершения обработки.")
         return
 
-    # Set chat state with lock for race condition protection
-    old_meeting = _chat_state.get(chat_id, {}).get("meeting_id")
-    _chat_state[chat_id] = {
-        "meeting_id": meeting.id,
-        "user_id": user.id,
-        "lock": _chat_state.get(chat_id, {}).get("lock") or asyncio.Lock(),
-    }
+    # Set chat state in DB (persists across restarts)
+    old_meeting = _get_chat_meeting_id(chat_id)
+    _set_chat_meeting_id(chat_id, meeting.id)
 
     title = meeting.title or "Запись"
     msg = f"💬 *AI-чат по записи:* {title}\n\n"
@@ -811,23 +863,28 @@ async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
 
 async def _handle_chat_message(chat_id: str, text: str):
     """Handle text message in chat mode — send to AI."""
-    state = _chat_state.get(chat_id)
-    if not state:
+    meeting_id = _get_chat_meeting_id(chat_id)
+    if not meeting_id:
         return
 
-    meeting_id = state["meeting_id"]
-    user_id = state["user_id"]
-    lock = state.get("lock") or asyncio.Lock()
+    # Per-chat lock for race condition protection
+    if chat_id not in _chat_locks:
+        _chat_locks[chat_id] = asyncio.Lock()
+    lock = _chat_locks[chat_id]
 
-    async with lock:  # prevent race conditions on parallel messages
+    async with lock:
         # Show typing indicator
         await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
 
         db = SessionLocal()
         try:
+            user = _find_user_by_chat_id(chat_id, db)
+            if not user:
+                return
+
             meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
             if not meeting or not meeting.transcript:
-                _chat_state.pop(chat_id, None)
+                _set_chat_meeting_id(chat_id, None)
                 await _tg_send(chat_id, "Встреча не найдена. Чат завершён.")
                 return
 
@@ -835,7 +892,7 @@ async def _handle_chat_message(chat_id: str, text: str):
 
             # Save user question
             db.add(ChatMessage(
-                user_id=user_id, meeting_id=meeting_id,
+                user_id=user.id, meeting_id=meeting_id,
                 role=ChatRole.user, content=text,
             ))
             db.commit()
@@ -843,18 +900,18 @@ async def _handle_chat_message(chat_id: str, text: str):
             # Get history
             history = (
                 db.query(ChatMessage)
-                .filter(ChatMessage.meeting_id == meeting_id, ChatMessage.user_id == user_id)
+                .filter(ChatMessage.meeting_id == meeting_id, ChatMessage.user_id == user.id)
                 .order_by(ChatMessage.created_at)
                 .all()
             )
 
-            # Call AI
+            # Call AI (Telegram-optimized prompt + fallback chain)
             from app.services.chat_engine import ask_about_meeting
-            answer = await ask_about_meeting(meeting, history)
+            answer = await ask_about_meeting(meeting, history, is_telegram=True)
 
             # Save AI answer
             db.add(ChatMessage(
-                user_id=user_id, meeting_id=meeting_id,
+                user_id=user.id, meeting_id=meeting_id,
                 role=ChatRole.assistant, content=answer,
             ))
             db.commit()
