@@ -313,12 +313,18 @@ _CHAT_QUESTIONS_FREE = 3   # per meeting for free plan
 _CHAT_QUESTIONS_PAID = None  # unlimited for paid plans
 
 
+def _user_has_own_keys(user: User) -> bool:
+    """Check if user has their own LLM API keys configured."""
+    from app.services.providers.registry import get_user_keys
+    return bool(get_user_keys(user))
+
+
 def _check_chat_limit(meeting: Meeting, user: User) -> tuple[bool, int, int | None, str | None]:
     """Check AI chat question limit per meeting. Returns (ok, used, limit, warning_text).
 
-    limit=None means unlimited (paid plans). Templates don't count.
+    limit=None means unlimited. Bypass for: paid plans, users with own API keys, templates.
     """
-    if user.plan in ("start", "pro"):
+    if user.plan in ("start", "pro") or _user_has_own_keys(user):
         return True, meeting.chat_questions_used or 0, None, None
 
     used = meeting.chat_questions_used or 0

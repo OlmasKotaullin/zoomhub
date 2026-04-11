@@ -439,8 +439,10 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
     if mid:
         meeting = db.query(Meeting).filter(Meeting.id == mid, Meeting.user_id == user.id).first()
         if meeting:
-            # Check per-meeting AI chat limit (templates bypass)
-            if not is_template and user.plan not in ("start", "pro"):
+            # Check per-meeting AI chat limit (bypass for paid plans, own API keys, templates)
+            from app.services.providers.registry import get_user_keys
+            has_own_keys = bool(get_user_keys(user))
+            if not is_template and user.plan not in ("start", "pro") and not has_own_keys:
                 used = meeting.chat_questions_used or 0
                 limit = 3  # free plan: 3 questions per meeting
                 if used >= limit:
