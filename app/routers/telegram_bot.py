@@ -98,6 +98,7 @@ async def setup_bot_commands():
         {"command": "start", "description": "Начать работу с ZoomHub"},
         {"command": "help", "description": "Справка"},
         {"command": "plan", "description": "Тариф и лимиты"},
+        {"command": "meetings", "description": "Последние записи"},
         {"command": "exit", "description": "Выйти из AI-чата"},
     ])
 
@@ -431,6 +432,10 @@ async def telegram_webhook(request: Request):
         await _handle_plan(chat_id)
         return {"ok": True}
 
+    if text.startswith("/meetings"):
+        await _handle_meetings(chat_id)
+        return {"ok": True}
+
     # Priority 2: Media handling (depends on chat mode)
     file_id, filename, file_size = _extract_media(message)
     message_id = message.get("message_id", 0)
@@ -597,6 +602,48 @@ async def _handle_plan(chat_id: str):
         db.close()
 
 
+async def _handle_meetings(chat_id: str):
+    """Show last 5 meetings with AI-chat buttons."""
+    db = SessionLocal()
+    try:
+        user = _find_user_by_chat_id(chat_id, db)
+        if not user:
+            await _tg_send(
+                chat_id,
+                "Аккаунт не подключён.\n"
+                f"Подключите Telegram в настройках: {APP_URL}/settings"
+            )
+            return
+
+        meetings = (
+            db.query(Meeting)
+            .filter(Meeting.user_id == user.id, Meeting.status == MeetingStatus.ready)
+            .order_by(Meeting.created_at.desc())
+            .limit(5)
+            .all()
+        )
+
+        if not meetings:
+            await _tg_send(chat_id, "У вас пока нет записей. Отправьте аудио или видео.")
+            return
+
+        msg = "📁 *Последние записи:*\n"
+        buttons = []
+        for i, m in enumerate(meetings, 1):
+            title = m.title or "Запись"
+            date_str = m.date.strftime("%d.%m") if m.date else ""
+            dur = f"{m.duration_seconds // 60} мин" if m.duration_seconds else ""
+            meta = f" — {date_str}" + (f", {dur}" if dur else "")
+            msg += f"\n{i}. {title}{meta}"
+            buttons.append([{"text": f"💬 {i}. {title[:30]}", "callback_data": f"chat:{m.id}"}])
+
+        buttons.append([{"text": "🌐 Все записи на сайте", "url": f"{APP_URL}/meetings"}])
+
+        await _tg_send(chat_id, msg, reply_markup={"inline_keyboard": buttons})
+    finally:
+        db.close()
+
+
 # ──────────────── Media processing ────────────────
 
 async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
@@ -746,6 +793,24 @@ async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_i
                            "✓ Скачано\n"
                            "✓ Транскрипт готов\n"
                            "— Генерирую конспект...")
+
+        # Smart title: replace generic "Запись DD.MM" with first topic or TLDR
+        try:
+            sdb = SessionLocal()
+            m = sdb.query(Meeting).filter(Meeting.id == meeting_id).first()
+            if m and m.title and m.title.startswith("Запись") and m.summary:
+                new_title = None
+                if m.summary.topics:
+                    t = m.summary.topics[0]
+                    new_title = (t.get("topic", "") if isinstance(t, dict) else str(t))
+                if not new_title and m.summary.tldr:
+                    new_title = m.summary.tldr
+                if new_title:
+                    m.title = new_title[:80].rstrip(".")
+                    sdb.commit()
+            sdb.close()
+        except Exception:
+            pass
 
         await _send_result(chat_id, meeting_id, progress_msg_id)
     except Exception as e:
