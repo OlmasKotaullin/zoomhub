@@ -747,7 +747,8 @@ async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, mes
         text = await _transcribe_voice_groq(file_id)
 
         if not text:
-            # Fallback: RunPod (slower but handles edge cases)
+            # Fallback: RunPod (slower — warn user)
+            await _tg_send(chat_id, "⏳ Распознаю голосовое, подождите немного...")
             import tempfile, shutil
             tmp_dir = tempfile.mkdtemp()
             voice_path = f"{tmp_dir}/voice.ogg"
@@ -763,7 +764,8 @@ async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, mes
             await _tg_send(chat_id, "Не удалось распознать голосовое. Попробуйте текстом.")
             return
 
-        # Send transcribed text as chat message
+        # Show what was recognized, then send as AI question
+        await _tg_send(chat_id, f"🎤 _{text}_", parse_mode="Markdown")
         await _handle_chat_message(chat_id, text)
 
     except Exception as e:
@@ -792,12 +794,14 @@ async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
     if old_meeting and old_meeting != meeting.id:
         msg += f"_Переключился с другой записи._\n\n"
     msg += (
-        "Задайте вопрос — отвечу по транскрипту.\n\n"
+        "Задайте вопрос текстом или голосовым — отвечу по транскрипту.\n\n"
         "Примеры:\n"
         "• _Какие задачи обсуждали?_\n"
         "• _Что решили по бюджету?_\n"
         "• _Составь протокол встречи_\n\n"
-        "Для выхода: /exit или отправьте новый файл."
+        "🎤 Голосовое = вопрос к AI\n"
+        "📎 Аудио/видео файл = новая транскрипция\n\n"
+        "Для выхода: /exit"
     )
 
     await _tg_send(chat_id, msg, reply_markup={"inline_keyboard": [
