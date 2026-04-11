@@ -8,6 +8,7 @@
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 import io
 import json
 import logging
@@ -64,6 +65,41 @@ def _set_chat_meeting_id(chat_id: str, meeting_id: int | None):
 def _is_in_chat(chat_id: str) -> bool:
     """Check if user is in AI chat mode."""
     return _get_chat_meeting_id(chat_id) is not None
+
+
+# ──────────────── Typing indicator ────────────────
+
+@asynccontextmanager
+async def _typing_loop(chat_id: str):
+    """Send typing indicator every 4 sec until context exits."""
+    stop = asyncio.Event()
+
+    async def _loop():
+        while not stop.is_set():
+            await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=4)
+            except asyncio.TimeoutError:
+                pass
+
+    task = asyncio.create_task(_loop())
+    try:
+        yield
+    finally:
+        stop.set()
+        task.cancel()
+
+
+# ──────────────── Bot setup ────────────────
+
+async def setup_bot_commands():
+    """Register bot commands menu in Telegram."""
+    await _tg_api("setMyCommands", commands=[
+        {"command": "start", "description": "Начать работу с ZoomHub"},
+        {"command": "help", "description": "Справка"},
+        {"command": "plan", "description": "Тариф и лимиты"},
+        {"command": "exit", "description": "Выйти из AI-чата"},
+    ])
 
 
 # ──────────────── Telegram API helpers ────────────────
@@ -391,6 +427,10 @@ async def telegram_webhook(request: Request):
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
         return {"ok": True}
 
+    if text.startswith("/plan"):
+        await _handle_plan(chat_id)
+        return {"ok": True}
+
     # Priority 2: Media handling (depends on chat mode)
     file_id, filename, file_size = _extract_media(message)
     message_id = message.get("message_id", 0)
@@ -461,7 +501,14 @@ async def _handle_start(chat_id: str, text: str):
                     )
                     return
 
-            await _tg_send(chat_id, "Ссылка устарела. Получите новую в настройках ZoomHub.")
+            await _tg_send(
+                chat_id,
+                "Ссылка привязки устарела.\nПолучите новую в настройках ZoomHub:",
+                reply_markup={"inline_keyboard": [[{
+                    "text": "Открыть настройки",
+                    "url": f"{APP_URL}/settings"
+                }]]}
+            )
         else:
             # No token — check if already linked
             user = _find_user_by_chat_id(chat_id, db)
@@ -494,16 +541,56 @@ async def _handle_help(chat_id: str):
     """Send help message."""
     await _tg_send(
         chat_id,
-        "*ZoomHub — Telegram Bot*\n\n"
+        "*ZoomHub — рабочая память встреч*\n\n"
         "Отправьте аудио или видео — получите:\n"
-        "• Точный транскрипт с таймкодами\n"
-        "• AI-саммари с ключевыми идеями и задачами\n\n"
-        "Результаты автоматически сохраняются на сайте — "
-        "там можно задать вопросы по записи через AI-чат.\n\n"
-        "Форматы: MP3, M4A, MP4, WAV, OGG, WebM\n"
-        "Лимит: до 2 ГБ\n\n"
+        "• Транскрипт с таймкодами\n"
+        "• AI-конспект с задачами и темами\n"
+        "• AI-чат: задавайте вопросы по записи\n\n"
+        "*Команды:*\n"
+        "/plan — тариф и лимиты\n"
+        "/exit — выйти из AI-чата\n\n"
+        "Форматы: MP3, M4A, MP4, WAV, OGG, WebM (до 2 ГБ)\n\n"
         f"Сайт: {APP_URL}"
     )
+
+
+async def _handle_plan(chat_id: str):
+    """Show user's plan, usage and limits."""
+    db = SessionLocal()
+    try:
+        user = _find_user_by_chat_id(chat_id, db)
+        if not user:
+            await _tg_send(
+                chat_id,
+                "Аккаунт не подключён.\n"
+                f"Подключите Telegram в настройках: {APP_URL}/settings"
+            )
+            return
+
+        _reset_month_if_needed(user, db)
+
+        plan_names = {"free": "Free", "start": "Start", "pro": "Pro"}
+        plan_name = plan_names.get(user.plan, user.plan or "Free")
+
+        limit_hours = user.plan_hours_limit or 4
+        used_hours = round((user.usage_seconds_month or 0) / 3600, 1)
+        remaining = round(limit_hours - used_hours, 1)
+
+        msg = f"📊 *Ваш тариф: {plan_name}*\n\n"
+        msg += f"*Транскрипция:* {used_hours} из {limit_hours} ч "
+        msg += f"(осталось {max(0, remaining)} ч)\n"
+
+        if user.plan == "free":
+            msg += f"*AI-чат:* 3 вопроса на каждую запись\n"
+            msg += f"*Шаблоны:* безлимит (Протокол, Задачи)\n"
+            msg += f"\n💡 Тариф Start (499 ₽/мес) — 30 ч + безлимитный AI-чат"
+        else:
+            msg += f"*AI-чат:* безлимит\n"
+            msg += f"*Шаблоны:* безлимит\n"
+
+        await _tg_send(chat_id, msg)
+    finally:
+        db.close()
 
 
 # ──────────────── Media processing ────────────────
@@ -599,6 +686,27 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
             return
 
         meeting.audio_path = str(file_path)
+
+        # Check minimum duration (reject files < 5 sec)
+        try:
+            import subprocess
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(file_path)],
+                capture_output=True, text=True, timeout=10
+            )
+            duration = float(probe.stdout.strip()) if probe.returncode == 0 else 0
+            if 0 < duration < 5:
+                meeting.status = MeetingStatus.error
+                meeting.error_message = "Файл слишком короткий"
+                db.commit()
+                if progress_msg_id:
+                    await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+                await _tg_send(chat_id, "Файл слишком короткий (менее 5 секунд). Отправьте запись длиннее.")
+                return
+        except Exception:
+            pass  # ffprobe failed — continue anyway
+
         db.commit()
 
         # Update progress: download done
@@ -616,7 +724,7 @@ async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: in
 
     except Exception as e:
         logger.error(f"Telegram media handler error: {e}", exc_info=True)
-        await _tg_send(chat_id, f"Ошибка обработки: {str(e)[:200]}")
+        await _tg_send(chat_id, "Не удалось обработать файл. Попробуйте отправить ещё раз.")
     finally:
         db.close()
 
@@ -640,7 +748,7 @@ async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_i
         logger.error(f"Pipeline error for meeting {meeting_id}: {e}", exc_info=True)
         if progress_msg_id:
             await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
-        await _tg_send(chat_id, f"Ошибка обработки: {str(e)[:200]}")
+        await _tg_send(chat_id, "Произошла ошибка при обработке записи. Попробуйте отправить файл ещё раз.")
 
 
 async def _send_result(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
@@ -838,10 +946,10 @@ async def _transcribe_voice_groq(file_id: str) -> str | None:
 async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, message_id: int):
     """Transcribe voice message and send as AI chat question."""
     try:
-        await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
 
         # Fast path: Groq Whisper API (1-3 sec, in-memory, no disk I/O)
-        text = await _transcribe_voice_groq(file_id)
+        async with _typing_loop(chat_id):
+            text = await _transcribe_voice_groq(file_id)
 
         if not text:
             # Fallback: RunPod (slower — warn user)
@@ -914,9 +1022,6 @@ async def _handle_chat_message(chat_id: str, text: str):
     lock = _chat_locks[chat_id]
 
     async with lock:
-        # Show typing indicator
-        await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
-
         db = SessionLocal()
         try:
             user = _find_user_by_chat_id(chat_id, db)
@@ -959,9 +1064,10 @@ async def _handle_chat_message(chat_id: str, text: str):
                 .all()
             )
 
-            # Call AI (Telegram-optimized prompt + fallback chain)
+            # Call AI with continuous typing indicator
             from app.services.chat_engine import ask_about_meeting
-            answer = await ask_about_meeting(meeting, history, is_telegram=True)
+            async with _typing_loop(chat_id):
+                answer = await ask_about_meeting(meeting, history, is_telegram=True)
 
             # Increment per-meeting counter AFTER successful response
             _increment_chat_usage(meeting, db)
@@ -984,7 +1090,7 @@ async def _handle_chat_message(chat_id: str, text: str):
 
         except Exception as e:
             logger.error(f"Chat error for meeting {meeting_id}: {e}", exc_info=True)
-            await _tg_send(chat_id, f"Ошибка AI-чата: {str(e)[:200]}")
+            await _tg_send(chat_id, "AI-ассистент временно недоступен. Попробуйте через минуту.")
         finally:
             db.close()
 

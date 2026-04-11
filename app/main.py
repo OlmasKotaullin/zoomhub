@@ -49,6 +49,13 @@ async def lifespan(app: FastAPI):
     from app.services.zoom_user_poller import start_user_polling
     tasks.append(asyncio.create_task(start_user_polling()))
 
+    # Register Telegram bot commands menu
+    try:
+        from app.routers.telegram_bot import setup_bot_commands
+        await setup_bot_commands()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Bot commands setup: {e}")
+
     yield
 
     for task in tasks:
