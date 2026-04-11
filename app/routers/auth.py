@@ -146,6 +146,16 @@ async def register(
     return _login_response(user.id, redirect_to="/onboarding")
 
 
+@router.get("/auth/magic")
+async def magic_login(token: str):
+    """Magic-link login from Telegram /web command (no password needed)."""
+    from app.auth import decode_token
+    user_id = decode_token(token)
+    if not user_id:
+        return RedirectResponse("/login", status_code=302)
+    return _login_response(user_id)
+
+
 @router.get("/logout")
 async def logout():
     response = RedirectResponse("/login", status_code=302)

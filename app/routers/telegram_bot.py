@@ -39,6 +39,10 @@ _pending_media: dict[str, dict] = {}
 # Last command response message ID per chat (to delete on next command)
 _last_cmd_msg: dict[str, int] = {}
 
+# Telegram registration state machine
+_pending_reg: dict[str, dict] = {}  # chat_id -> {"step": "name"|"email", "name": str, "invite_code": str, "ts": float}
+_REG_TTL = 600  # 10 minutes timeout
+
 
 async def _tg_send_cmd(chat_id: str, text: str, **kwargs) -> dict | None:
     """Send a command response and remember its ID for cleanup on next command."""
@@ -118,6 +122,7 @@ async def setup_bot_commands():
         {"command": "help", "description": "Справка"},
         {"command": "plan", "description": "Тариф и лимиты"},
         {"command": "meetings", "description": "Последние записи"},
+        {"command": "web", "description": "Открыть личный кабинет"},
         {"command": "exit", "description": "Выйти из AI-чата"},
     ])
 
@@ -453,6 +458,10 @@ async def telegram_webhook(request: Request):
         await _handle_plan(chat_id)
         return {"ok": True}
 
+    if text.startswith("/web"):
+        await _handle_web(chat_id)
+        return {"ok": True}
+
     if text.startswith("/meetings"):
         await _handle_meetings(chat_id)
         return {"ok": True}
@@ -485,7 +494,82 @@ async def telegram_webhook(request: Request):
         asyncio.create_task(_handle_chat_message(chat_id, text))
         return {"ok": True}
 
-    # Priority 4: Text without chat mode → hint
+    # Priority 4: Telegram registration flow
+    if text and chat_id in _pending_reg:
+        import time
+        reg = _pending_reg[chat_id]
+        # TTL check
+        if time.time() - reg.get("ts", 0) > _REG_TTL:
+            _pending_reg.pop(chat_id, None)
+            await _tg_send(chat_id, "Время регистрации истекло. Отправьте ссылку заново.")
+            return {"ok": True}
+
+        if reg["step"] == "name":
+            reg["name"] = text.strip()[:100]
+            reg["step"] = "email"
+            await _tg_send(chat_id, f"{reg['name']}, укажите email (для личного кабинета на сайте):")
+            return {"ok": True}
+
+        elif reg["step"] == "email":
+            email = text.strip().lower()
+            # Basic email validation
+            if not re.match(r'^[^@]+@[^@]+\.[^@]+$', email):
+                await _tg_send(chat_id, "Некорректный email. Попробуйте ещё раз:")
+                return {"ok": True}
+
+            # Check duplicate
+            db = SessionLocal()
+            try:
+                existing = db.query(User).filter(User.email == email).first()
+                if existing:
+                    await _tg_send(chat_id, "Этот email уже зарегистрирован. Введите другой:")
+                    return {"ok": True}
+
+                # Create user
+                import secrets
+                from app.auth import hash_password
+                from app.models import InviteCode
+
+                user = User(
+                    name=reg["name"],
+                    email=email,
+                    hashed_password=hash_password(secrets.token_urlsafe(32)),
+                    telegram_chat_id=chat_id,
+                    notify_telegram=True,
+                    onboarding_completed=True,
+                )
+                db.add(user)
+                db.flush()
+
+                # Use invite code
+                invite_code = reg.get("invite_code", "")
+                if invite_code:
+                    ic = db.query(InviteCode).filter(InviteCode.code == invite_code).first()
+                    if ic:
+                        ic.used_count = (ic.used_count or 0) + 1
+                        ic.used_by_id = user.id
+                        user.invite_code_id = ic.id
+
+                # Generate 2 personal invite codes
+                import secrets as _sec
+                for _ in range(2):
+                    code = f"ZH-{_sec.token_hex(3).upper()}"
+                    db.add(InviteCode(code=code, owner_id=user.id))
+
+                db.commit()
+                _pending_reg.pop(chat_id, None)
+
+                await _tg_send(
+                    chat_id,
+                    f"✅ *Готово, {reg['name']}!*\n\n"
+                    f"Аккаунт создан. Бесплатно: 4 ч транскрипции в месяц.\n\n"
+                    f"Отправьте аудио или видео — конспект будет через 2-3 мин."
+                )
+            finally:
+                db.close()
+            return {"ok": True}
+
+    # Priority 5: Text without chat mode → hint
     if text and not text.startswith("/"):
         await _tg_send(
             chat_id,
@@ -499,16 +583,54 @@ async def telegram_webhook(request: Request):
 # ──────────────── Command handlers ────────────────
 
 async def _handle_start(chat_id: str, text: str):
-    """Handle /start [token] — link Telegram to ZoomHub account."""
+    """Handle /start [token|invite_code] — link or register via Telegram."""
+    import time
     from app.auth import decode_token
+    from app.models import InviteCode
 
     parts = text.split(maxsplit=1)
-    token = parts[1] if len(parts) > 1 else ""
+    param = parts[1].strip() if len(parts) > 1 else ""
 
     db = SessionLocal()
     try:
-        if token:
-            user_id = decode_token(token)
+        # Check if already linked
+        existing_user = _find_user_by_chat_id(chat_id, db)
+
+        if param.startswith("ZH-"):
+            # Invite code → start Telegram registration
+            if existing_user:
+                await _tg_send(
+                    chat_id,
+                    f"*Привет, {existing_user.name}!*\n\n"
+                    f"Ваш аккаунт уже подключён.\n"
+                    f"Отправьте аудио или видео для транскрипции."
+                )
+                return
+
+            ic = db.query(InviteCode).filter(
+                InviteCode.code == param,
+                InviteCode.is_active == True,
+            ).first()
+            if not ic or (ic.max_uses and ic.used_count >= ic.max_uses):
+                await _tg_send(chat_id,
+                    "Инвайт-код недействителен или уже использован.\n"
+                    "Запросите новый у того, кто вас пригласил.")
+                return
+
+            # Start registration flow
+            _pending_reg[chat_id] = {
+                "step": "name",
+                "invite_code": param,
+                "ts": time.time(),
+            }
+            await _tg_send(chat_id,
+                "*ZoomHub* — рабочая память ваших встреч 🎙\n\n"
+                "Для начала — как вас зовут?")
+            return
+
+        if param:
+            # JWT token → link existing account
+            user_id = decode_token(param)
             if user_id:
                 user = db.query(User).filter(User.id == user_id).first()
                 if user:
@@ -518,12 +640,9 @@ async def _handle_start(chat_id: str, text: str):
                     await _tg_send(
                         chat_id,
                         f"*Привет, {user.name}!* 👋\n\n"
-                        f"Telegram подключён к ZoomHub.\n\n"
-                        f"Что умеет бот:\n"
-                        f"• Отправьте аудио/видео — конспект с задачами за 2-3 мин\n"
-                        f"• Транскрипт с таймкодами (.txt)\n"
-                        f"• AI-чат: задайте вопрос по записи на сайте\n\n"
-                        f"Бесплатно {user.plan_hours_limit or 4} ч/мес. Попробуйте — отправьте первый файл!"
+                        f"Telegram подключён к ZoomHub.\n"
+                        f"Отправьте аудио или видео — конспект за 2-3 мин.\n\n"
+                        f"Бесплатно {user.plan_hours_limit or 4} ч/мес."
                     )
                     return
 
@@ -536,12 +655,11 @@ async def _handle_start(chat_id: str, text: str):
                 }]]}
             )
         else:
-            # No token — check if already linked
-            user = _find_user_by_chat_id(chat_id, db)
-            if user:
+            # No param — already linked or new user
+            if existing_user:
                 await _tg_send(
                     chat_id,
-                    f"*Привет, {user.name}!*\n\n"
+                    f"*Привет, {existing_user.name}!*\n\n"
                     f"Ваш аккаунт уже подключён.\n"
                     f"Отправьте аудио или видео для транскрипции."
                 )
@@ -549,17 +667,9 @@ async def _handle_start(chat_id: str, text: str):
                 await _tg_send(
                     chat_id,
                     "*ZoomHub* — рабочая память ваших встреч\n\n"
-                    "Отправьте аудио или видео — за 2-3 минуты получите:\n"
-                    "• AI-конспект с задачами и темами\n"
-                    "• Транскрипт с таймкодами\n"
-                    "• AI-чат: задавайте вопросы по записи\n\n"
-                    "Бесплатно: 4 часа транскрипции в месяц.\n\n"
-                    "Как начать:\n"
-                    "1. Зарегистрируйтесь на сайте\n"
-                    "2. В настройках нажмите «Подключить Telegram»\n"
-                    "3. Перейдите по ссылке из настроек",
+                    "Сейчас идёт закрытое тестирование.\n"
+                    "Получите инвайт-ссылку у того, кто вас пригласил.",
                     reply_markup={"inline_keyboard": [
-                        [{"text": "Зарегистрироваться", "url": APP_URL}],
                         [{"text": "У меня есть аккаунт", "url": f"{APP_URL}/settings"}],
                     ]}
                 )
@@ -619,6 +729,28 @@ async def _handle_plan(chat_id: str):
             msg += f"*Шаблоны:* безлимит\n"
 
         await _tg_send_cmd(chat_id, msg)
+    finally:
+        db.close()
+
+
+async def _handle_web(chat_id: str):
+    """Generate magic-link to web dashboard (no password needed)."""
+    db = SessionLocal()
+    try:
+        user = _find_user_by_chat_id(chat_id, db)
+        if not user:
+            await _tg_send(chat_id, "Аккаунт не подключён.")
+            return
+        from app.auth import create_token
+        token = create_token(user.id, expires_hours=1)  # short-lived
+        await _tg_send_cmd(
+            chat_id,
+            "Откройте личный кабинет (ссылка действует 1 час):",
+            reply_markup={"inline_keyboard": [[{
+                "text": "🌐 Открыть ZoomHub",
+                "url": f"{APP_URL}/auth/magic?token={token}"
+            }]]}
+        )
     finally:
         db.close()
 
