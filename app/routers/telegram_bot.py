@@ -523,15 +523,19 @@ async def _handle_start(chat_id: str, text: str):
                 await _tg_send(
                     chat_id,
                     "*ZoomHub* — рабочая память ваших встреч\n\n"
-                    "Отправьте аудио или видео — получите:\n"
-                    "• Конспект с задачами и темами\n"
+                    "Отправьте аудио или видео — за 2-3 минуты получите:\n"
+                    "• AI-конспект с задачами и темами\n"
                     "• Транскрипт с таймкодами\n"
                     "• AI-чат: задавайте вопросы по записи\n\n"
-                    "Для начала нужен аккаунт ZoomHub.",
-                    reply_markup={"inline_keyboard": [[{
-                        "text": "Создать аккаунт",
-                        "url": APP_URL
-                    }]]}
+                    "Бесплатно: 4 часа транскрипции в месяц.\n\n"
+                    "Как начать:\n"
+                    "1. Зарегистрируйтесь на сайте\n"
+                    "2. В настройках нажмите «Подключить Telegram»\n"
+                    "3. Перейдите по ссылке из настроек",
+                    reply_markup={"inline_keyboard": [
+                        [{"text": "Зарегистрироваться", "url": APP_URL}],
+                        [{"text": "У меня есть аккаунт", "url": f"{APP_URL}/settings"}],
+                    ]}
                 )
     finally:
         db.close()
@@ -893,6 +897,15 @@ async def _handle_callback(callback: dict):
             await _handle_download(chat_id, meeting, extra)
         elif action == "chat":
             await _enter_chat_mode(chat_id, meeting, user)
+        elif action == "tpl":
+            # Template button pressed — enter chat mode if not already, then run template
+            template_key = extra
+            tpl = _TG_TEMPLATES.get(template_key)
+            if not tpl:
+                return
+            if not _is_in_chat(chat_id):
+                _set_chat_meeting_id(chat_id, meeting.id)
+            asyncio.create_task(_handle_chat_message(chat_id, tpl["prompt"], is_template=True))
         elif action == "exit":
             _set_chat_meeting_id(chat_id, None)
             await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
@@ -980,6 +993,30 @@ async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, mes
 
 # ──────────────── Chat mode ────────────────
 
+# Telegram-adapted templates (shorter prompts, no markdown headers)
+_TG_TEMPLATES = {
+    "follow_up": {"name": "Follow Up", "prompt": "Определи все задачи, ответственных и следующие шаги по этой встрече. Используй только факты из транскрипта."},
+    "summary": {"name": "Резюме", "prompt": "Дай структурированное резюме встречи: ключевые темы, решения, задачи. Только факты из транскрипта."},
+    "protocol": {"name": "Протокол", "prompt": "Составь формальный протокол встречи: дата, участники, повестка, решения, задачи с ответственными и сроками. Только факты из транскрипта."},
+    "tasks": {"name": "Трекер задач", "prompt": "Извлеки все задачи из встречи в виде таблицы: номер, ответственный, задача, дедлайн. Только факты из транскрипта."},
+}
+
+
+def _chat_keyboard(meeting_id: int) -> dict:
+    """Inline keyboard for AI chat mode — templates + exit."""
+    return {"inline_keyboard": [
+        [
+            {"text": "📋 Протокол", "callback_data": f"tpl:{meeting_id}:protocol"},
+            {"text": "✅ Задачи", "callback_data": f"tpl:{meeting_id}:tasks"},
+        ],
+        [
+            {"text": "📊 Follow Up", "callback_data": f"tpl:{meeting_id}:follow_up"},
+            {"text": "📄 Резюме", "callback_data": f"tpl:{meeting_id}:summary"},
+        ],
+        [{"text": "❌ Завершить чат", "callback_data": f"exit:{meeting_id}"}],
+    ]}
+
+
 async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
     """Enter AI chat mode for a specific meeting."""
     if not meeting.transcript or not meeting.transcript.full_text:
@@ -991,26 +1028,15 @@ async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
     _set_chat_meeting_id(chat_id, meeting.id)
 
     title = meeting.title or "Запись"
-    msg = f"💬 *AI-чат по записи:* {title}\n\n"
+    msg = f"💬 *AI-чат:* {title}\n\n"
     if old_meeting and old_meeting != meeting.id:
         msg += f"_Переключился с другой записи._\n\n"
-    msg += (
-        "Задайте вопрос текстом или голосовым — отвечу по транскрипту.\n\n"
-        "Примеры:\n"
-        "• _Какие задачи обсуждали?_\n"
-        "• _Что решили по бюджету?_\n"
-        "• _Составь протокол встречи_\n\n"
-        "🎤 Голосовое = вопрос к AI\n"
-        "📎 Аудио/видео файл = новая транскрипция\n\n"
-        "Для выхода: /exit"
-    )
+    msg += "Задайте вопрос текстом или голосовым 🎤\nИли нажмите шаблон:"
 
-    await _tg_send(chat_id, msg, reply_markup={"inline_keyboard": [
-        [{"text": "❌ Завершить чат", "callback_data": f"exit:{meeting.id}"}],
-    ]})
+    await _tg_send(chat_id, msg, reply_markup=_chat_keyboard(meeting.id))
 
 
-async def _handle_chat_message(chat_id: str, text: str):
+async def _handle_chat_message(chat_id: str, text: str, is_template: bool = False):
     """Handle text message in chat mode — send to AI."""
     meeting_id = _get_chat_meeting_id(chat_id)
     if not meeting_id:
@@ -1034,9 +1060,9 @@ async def _handle_chat_message(chat_id: str, text: str):
                 await _tg_send(chat_id, "Встреча не найдена. Чат завершён.")
                 return
 
-            # Check per-meeting AI chat limit (templates bypass this)
+            # Check per-meeting AI chat limit (templates bypass)
             ok, used, limit, warning = _check_chat_limit(meeting, user)
-            if not ok:
+            if not ok and not is_template:
                 title = meeting.title or "Запись"
                 await _tg_send(
                     chat_id,
@@ -1069,11 +1095,12 @@ async def _handle_chat_message(chat_id: str, text: str):
             async with _typing_loop(chat_id):
                 answer = await ask_about_meeting(meeting, history, is_telegram=True)
 
-            # Increment per-meeting counter AFTER successful response
-            _increment_chat_usage(meeting, db)
+            # Increment per-meeting counter AFTER successful response (skip templates)
+            if not is_template:
+                _increment_chat_usage(meeting, db)
 
             # Append warning if close to limit
-            if warning:
+            if warning and not is_template:
                 answer += f"\n\n---\n_{warning}_"
 
             # Save AI answer
@@ -1083,10 +1110,9 @@ async def _handle_chat_message(chat_id: str, text: str):
             ))
             db.commit()
 
-            # Send answer (may be long)
-            await _send_long_message(chat_id, answer, reply_markup={"inline_keyboard": [
-                [{"text": "❌ Завершить чат", "callback_data": f"exit:{meeting_id}"}],
-            ]})
+            # Send answer with template buttons
+            await _send_long_message(chat_id, answer,
+                                     reply_markup=_chat_keyboard(meeting_id))
 
         except Exception as e:
             logger.error(f"Chat error for meeting {meeting_id}: {e}", exc_info=True)
@@ -1117,8 +1143,12 @@ async def _send_long_message(chat_id: str, text: str, parse_mode: str = "Markdow
     if current:
         chunks.append(current.strip())
 
+    total = len(chunks)
     for i, chunk in enumerate(chunks):
-        is_last = i == len(chunks) - 1
+        is_last = i == total - 1
+        # Add chunk numbering
+        if total > 1:
+            chunk = f"({i+1}/{total})\n\n{chunk}"
         markup = reply_markup if is_last else None
         await _tg_send(chat_id, chunk, parse_mode=parse_mode, reply_markup=markup)
         if not is_last:
