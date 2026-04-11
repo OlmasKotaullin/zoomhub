@@ -189,10 +189,11 @@ def get_chat_provider_chain() -> list[LLMProvider]:
     """Возвращает цепочку провайдеров для AI-чата (основной + fallback).
 
     Приоритет: качество + контекст + бесплатность.
-    Gemini (900K) → Groq (128K) → Claude (200K) → GigaChat (12K fallback)
+    Gemini (900K) → Groq (128K) → OpenRouter → DeepSeek → GigaChat (fallback)
+    Claude исключён: $3/вопрос убивает маржу при масштабе.
     """
     from app.config import (
-        GOOGLE_AI_API_KEY, GROQ_API_KEY, ANTHROPIC_API_KEY,
+        GOOGLE_AI_API_KEY, GROQ_API_KEY,
         GIGACHAT_AUTH_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY,
     )
 
@@ -205,8 +206,6 @@ def get_chat_provider_chain() -> list[LLMProvider]:
         chain.append(_make_openrouter())
     if DEEPSEEK_API_KEY:
         chain.append(_make_deepseek())
-    if ANTHROPIC_API_KEY:
-        chain.append(_make_claude())
     if GIGACHAT_AUTH_KEY:
         chain.append(_make_gigachat())
 

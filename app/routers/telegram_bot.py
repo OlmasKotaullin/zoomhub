@@ -285,24 +285,57 @@ def _find_user_by_chat_id(chat_id: str, db: Session) -> User | None:
     return db.query(User).filter(User.telegram_chat_id == chat_id).first()
 
 
-def _check_usage_limit(user: User, db: Session) -> tuple[bool, float, float]:
-    """Check if user has remaining hours. Returns (ok, used_hours, limit_hours).
-
-    Resets monthly counter if new month started.
-    """
+def _reset_month_if_needed(user: User, db: Session):
+    """Reset ALL monthly counters if new month started."""
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
 
-    # Reset if new month
-    if not user.usage_month_start or user.usage_month_start.month != now.month:
+    if (not user.usage_month_start
+            or user.usage_month_start.month != now.month
+            or user.usage_month_start.year != now.year):
         user.usage_seconds_month = 0
+        user.chat_questions_month = 0
         user.usage_month_start = now
         db.commit()
+
+
+def _check_usage_limit(user: User, db: Session) -> tuple[bool, float, float]:
+    """Check if user has remaining transcription hours. Returns (ok, used_hours, limit_hours)."""
+    _reset_month_if_needed(user, db)
 
     limit_hours = user.plan_hours_limit or 4
     used_hours = (user.usage_seconds_month or 0) / 3600
     ok = used_hours < limit_hours
     return ok, round(used_hours, 1), limit_hours
+
+
+def _check_chat_limit(user: User, db: Session) -> tuple[bool, int, int | None, str | None]:
+    """Check AI chat question limit. Returns (ok, used, limit, warning_text).
+
+    limit=None means unlimited. Templates don't count.
+    """
+    _reset_month_if_needed(user, db)
+
+    used = user.chat_questions_month or 0
+    limit = user.chat_questions_limit  # None = unlimited (paid plans)
+
+    if limit is None:
+        return True, used, None, None
+
+    remaining = limit - used
+    if remaining <= 0:
+        return False, used, limit, None
+
+    warning = None
+    if remaining <= 2:
+        warning = f"Осталось {remaining} из {limit} вопросов AI-чата в этом месяце."
+    return True, used, limit, warning
+
+
+def _increment_chat_usage(user: User, db: Session):
+    """Increment chat question counter AFTER successful AI response."""
+    user.chat_questions_month = (user.chat_questions_month or 0) + 1
+    db.commit()
 
 
 # ──────────────── Webhook handler ────────────────
@@ -882,6 +915,21 @@ async def _handle_chat_message(chat_id: str, text: str):
             if not user:
                 return
 
+            # Check AI chat limit (templates bypass this)
+            ok, used, limit, warning = _check_chat_limit(user, db)
+            if not ok:
+                saved_min = used * 3  # ~3 min saved per question
+                await _tg_send(
+                    chat_id,
+                    f"⚡ Вы использовали все {limit} вопросов AI-чата в этом месяце.\n\n"
+                    f"За этот месяц AI-чат сэкономил вам ~{saved_min} мин.\n\n"
+                    f"✅ Транскрипция и конспекты по-прежнему доступны\n"
+                    f"✅ Шаблоны (Протокол, Задачи) работают без ограничений\n\n"
+                    f"Хотите задавать вопросы без ограничений?\n"
+                    f"Тариф Start — 499 ₽/мес",
+                )
+                return
+
             meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
             if not meeting or not meeting.transcript:
                 _set_chat_meeting_id(chat_id, None)
@@ -908,6 +956,13 @@ async def _handle_chat_message(chat_id: str, text: str):
             # Call AI (Telegram-optimized prompt + fallback chain)
             from app.services.chat_engine import ask_about_meeting
             answer = await ask_about_meeting(meeting, history, is_telegram=True)
+
+            # Increment counter AFTER successful response
+            _increment_chat_usage(user, db)
+
+            # Append warning if close to limit
+            if warning:
+                answer += f"\n\n---\n_{warning}_"
 
             # Save AI answer
             db.add(ChatMessage(

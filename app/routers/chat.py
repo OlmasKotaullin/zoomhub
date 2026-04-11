@@ -394,6 +394,20 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
             yield f"data: {json.dumps({'done': True})}\n\n"
         return StreamingResponse(empty_error(), media_type="text/event-stream")
 
+    # Check AI chat limit (templates bypass this)
+    is_template = bool(template_key and template_key in CHAT_TEMPLATES)
+    if not is_template:
+        from app.routers.telegram_bot import _check_chat_limit, _reset_month_if_needed
+        _reset_month_if_needed(user, db)
+        limit = user.chat_questions_limit
+        used = user.chat_questions_month or 0
+        if limit is not None and used >= limit:
+            async def limit_stream():
+                msg = f"Лимит AI-чата исчерпан: {used}/{limit} вопросов в этом месяце. Перейдите на тариф Start (499 ₽/мес) для безлимитного доступа."
+                yield f"data: {json.dumps({'content': msg})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            return StreamingResponse(limit_stream(), media_type="text/event-stream")
+
     # Validate IDs
     try:
         mid = int(meeting_id) if meeting_id else None
@@ -586,6 +600,11 @@ async def chat_stream(request: Request, db: Session = Depends(get_db)):
                 content=full_response or "Ошибка генерации",
             )
             save_db.add(assistant_msg)
+            # Increment chat question counter (templates don't count)
+            if not is_template and full_response:
+                save_user = save_db.query(User).filter(User.id == user.id).first()
+                if save_user:
+                    save_user.chat_questions_month = (save_user.chat_questions_month or 0) + 1
             save_db.commit()
             saved_msg_id = assistant_msg.id
         except Exception as e:

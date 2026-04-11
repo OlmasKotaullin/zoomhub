@@ -117,6 +117,14 @@ def init_db():
             if "current_chat_meeting_id" not in user_cols:
                 migrations.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS current_chat_meeting_id INTEGER")
 
+            if "chat_questions_month" not in user_cols:
+                migrations += [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_questions_month INTEGER DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_questions_limit INTEGER DEFAULT 10",
+                    # Set unlimited for paid users
+                    "UPDATE users SET chat_questions_limit = NULL WHERE plan IN ('start', 'pro')",
+                ]
+
             if "plan" not in user_cols:
                 migrations += [
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'free'",

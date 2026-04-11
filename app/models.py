@@ -110,6 +110,9 @@ class User(Base):
     plan_hours_limit = Column(Integer, default=4)  # hours per month (free=4, start=30, pro=100)
     usage_seconds_month = Column(Integer, default=0)  # seconds used this month
     usage_month_start = Column(DateTime, nullable=True)  # start of current billing month
+    # AI chat limits (free=10 questions/month, start/pro=None=unlimited)
+    chat_questions_month = Column(Integer, default=0)
+    chat_questions_limit = Column(Integer, default=10)  # None = unlimited
 
     folders = relationship("Folder", back_populates="user", cascade="all, delete-orphan")
     meetings = relationship("Meeting", back_populates="user", cascade="all, delete-orphan")
