@@ -653,12 +653,11 @@ async def _handle_meetings(chat_id: str):
         for i, m in enumerate(meetings, 1):
             title = m.title or "Запись"
             date_str = m.date.strftime("%d.%m") if m.date else ""
-            dur = f"{m.duration_seconds // 60} мин" if m.duration_seconds else ""
-            meta = f" — {date_str}" + (f", {dur}" if dur else "")
-            msg += f"\n{i}. {title}{meta}"
-            buttons.append([{"text": f"💬 {i}. {title[:30]}", "callback_data": f"chat:{m.id}"}])
-
-        buttons.append([{"text": "🌐 Все записи на сайте", "url": f"{APP_URL}/meetings"}])
+            dur = f", {m.duration_seconds // 60} мин" if m.duration_seconds else ""
+            # Compact: title + date + duration in button text
+            btn_label = f"{title[:25]} · {date_str}{dur}"
+            msg += f"\n{i}. {title} — {date_str}{dur}"
+            buttons.append([{"text": btn_label, "callback_data": f"chat:{m.id}"}])
 
         await _tg_send_cmd(chat_id, msg, reply_markup={"inline_keyboard": buttons})
     finally:
@@ -1105,8 +1104,9 @@ _TG_TEMPLATES = {
     },
 }
 
-# Track last template message for cleanup
+# Track last template/welcome message for cleanup
 _last_template_msg: dict[str, int] = {}
+_last_chat_welcome: dict[str, int] = {}
 
 
 def _chat_keyboard(meeting_id: int) -> dict:
@@ -1150,16 +1150,22 @@ async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
         return
 
     # Set chat state in DB (persists across restarts)
-    old_meeting = _get_chat_meeting_id(chat_id)
     _set_chat_meeting_id(chat_id, meeting.id)
 
-    title = meeting.title or "Запись"
-    msg = f"💬 *AI-чат:* {title}\n\n"
-    if old_meeting and old_meeting != meeting.id:
-        msg += f"_Переключился с другой записи._\n\n"
-    msg += "Задайте вопрос текстом или голосовым 🎤\nИли нажмите шаблон:"
+    # Delete previous welcome message (prevents accumulation)
+    old_welcome = _last_chat_welcome.pop(chat_id, None)
+    if old_welcome:
+        try:
+            await _tg_api("deleteMessage", chat_id=chat_id, message_id=old_welcome)
+        except Exception:
+            pass
 
-    await _tg_send(chat_id, msg, reply_markup=_chat_keyboard(meeting.id))
+    title = meeting.title or "Запись"
+    msg = f"💬 *AI-чат:* {title}\n\nЗадайте вопрос текстом или голосовым 🎤\nИли нажмите шаблон:"
+
+    result = await _tg_send(chat_id, msg, reply_markup=_chat_keyboard(meeting.id))
+    if result and result.get("ok"):
+        _last_chat_welcome[chat_id] = result["result"]["message_id"]
 
 
 async def _handle_chat_message(chat_id: str, text: str, is_template: bool = False):
