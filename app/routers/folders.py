@@ -49,23 +49,25 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
         if len(key) <= 8: return key[:2] + "***" + key[-2:]
         return key[:4] + "***" + key[-4:]
 
+    # Серверные ключи показываем ТОЛЬКО для бесплатных провайдеров
+    # Платные (Anthropic, DeepSeek, OpenAI) — пустые, пользователь вводит свои
     server_keys = {
         "groq": bool(GROQ_API_KEY),
         "gemini": bool(GOOGLE_AI_API_KEY),
-        "anthropic": bool(ANTHROPIC_API_KEY),
         "gigachat": bool(GIGACHAT_AUTH_KEY),
-        "openai": bool(OPENAI_API_KEY),
-        "deepseek": bool(DEEPSEEK_API_KEY),
         "openrouter": bool(OPENROUTER_API_KEY),
+        "anthropic": False,
+        "openai": False,
+        "deepseek": False,
     }
     server_keys_masked = {
         "groq": mask_key(GROQ_API_KEY) if GROQ_API_KEY else "",
         "gemini": mask_key(GOOGLE_AI_API_KEY) if GOOGLE_AI_API_KEY else "",
-        "anthropic": mask_key(ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else "",
         "gigachat": mask_key(GIGACHAT_AUTH_KEY) if GIGACHAT_AUTH_KEY else "",
-        "openai": mask_key(OPENAI_API_KEY) if OPENAI_API_KEY else "",
-        "deepseek": mask_key(DEEPSEEK_API_KEY) if DEEPSEEK_API_KEY else "",
         "openrouter": mask_key(OPENROUTER_API_KEY) if OPENROUTER_API_KEY else "",
+        "anthropic": "",
+        "openai": "",
+        "deepseek": "",
     }
 
     # Буквица: серверная или пользовательская сессия
