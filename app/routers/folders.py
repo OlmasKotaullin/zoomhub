@@ -339,7 +339,6 @@ async def index(request: Request, db: Session = Depends(get_db)):
         db.query(Meeting)
         .filter(Meeting.user_id == user.id)
         .order_by(Meeting.created_at.desc())
-        .limit(20)
         .all()
     )
 
