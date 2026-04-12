@@ -252,3 +252,51 @@ async def give_invites(
     db.commit()
 
     return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.post("/recalc-usage")
+async def recalc_usage(request: Request, db: Session = Depends(get_db)):
+    """Пересчитать usage для всех пользователей по их meetings.duration_seconds."""
+    admin = _require_admin(request, db)
+    if not admin:
+        return {"error": "forbidden"}
+
+    import subprocess
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    now = datetime.now(timezone.utc)
+    users = db.query(User).all()
+    results = []
+
+    for user in users:
+        meetings = db.query(Meeting).filter(
+            Meeting.user_id == user.id,
+            Meeting.status == "ready",
+        ).all()
+
+        # Fix missing duration_seconds via ffprobe
+        for m in meetings:
+            if not m.duration_seconds and m.audio_path and Path(m.audio_path).exists():
+                try:
+                    probe = subprocess.run(
+                        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                         "-of", "default=noprint_wrappers=1:nokey=1", m.audio_path],
+                        capture_output=True, text=True, timeout=15
+                    )
+                    if probe.returncode == 0 and probe.stdout.strip():
+                        m.duration_seconds = int(float(probe.stdout.strip()))
+                except Exception:
+                    pass
+
+        # Recalculate monthly usage
+        total_seconds = sum(m.duration_seconds or 0 for m in meetings
+                           if m.created_at and m.created_at.month == now.month and m.created_at.year == now.year)
+        old_usage = user.usage_seconds_month or 0
+        user.usage_seconds_month = total_seconds
+        if not user.usage_month_start or user.usage_month_start.month != now.month:
+            user.usage_month_start = now
+        results.append({"user": user.email, "old": old_usage, "new": total_seconds})
+
+    db.commit()
+    return {"status": "ok", "users": results}

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import subprocess
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
@@ -144,6 +145,21 @@ def _get_meeting_source(meeting_id: int) -> str | None:
         db.close()
 
 
+def _get_duration_ffprobe(audio_path: str) -> int:
+    """Get audio duration in seconds via ffprobe. Returns 0 on failure."""
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
+            capture_output=True, text=True, timeout=15
+        )
+        if probe.returncode == 0 and probe.stdout.strip():
+            return int(float(probe.stdout.strip()))
+    except Exception as e:
+        logger.warning(f"ffprobe failed for {audio_path}: {e}")
+    return 0
+
+
 async def process_meeting(meeting_id: int, download_url: str | None = None, access_token: str | None = None):
     """Фоновая обработка записи: скачивание → транскрибация → конспект."""
     try:
@@ -184,8 +200,13 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
             transcript_text = result["full_text"]
             _save_transcript(meeting_id, result["full_text"], result["segments"])
 
-            # Сохраняем duration и обновляем usage
-            _update_duration_and_usage(meeting_id, result.get("duration_seconds", 0))
+            # Вычисляем duration через ffprobe (провайдеры не возвращают его)
+            duration = result.get("duration_seconds", 0) or _get_duration_ffprobe(audio_path)
+            if duration:
+                logger.info(f"[{meeting_id}] Длительность: {duration} сек ({duration // 60} мин)")
+            else:
+                logger.warning(f"[{meeting_id}] Не удалось определить длительность аудио")
+            _update_duration_and_usage(meeting_id, duration)
 
         except Exception as e:
             logger.error(f"[{meeting_id}] Ошибка транскрибации: {e}")
