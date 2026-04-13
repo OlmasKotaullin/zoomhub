@@ -147,13 +147,16 @@ async def register(
 
 
 @router.get("/auth/magic")
-async def magic_login(token: str):
+async def magic_login(token: str, redirect: str = "/"):
     """Magic-link login from Telegram /web command (no password needed)."""
     from app.auth import decode_token
     user_id = decode_token(token)
     if not user_id:
         return RedirectResponse("/login", status_code=302)
-    return _login_response(user_id)
+    # Sanitize redirect — only allow internal paths
+    if not redirect.startswith("/") or redirect.startswith("//"):
+        redirect = "/"
+    return _login_response(user_id, redirect_to=redirect)
 
 
 @router.get("/logout")

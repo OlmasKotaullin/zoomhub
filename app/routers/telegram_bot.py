@@ -1240,15 +1240,19 @@ async def _send_result(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
         if len(message) > 3800:
             message = message[:3750] + "\n\n_...полный текст на сайте_"
 
-        # Inline buttons: 2 rows
+        # Inline buttons: 2 rows (with magic-link for auto-login)
         mid = meeting.id
+        from app.auth import create_token
+        magic_token = create_token(meeting.user_id, expires_hours=24)
+        magic_url = f"{APP_URL}/auth/magic?token={magic_token}&redirect=/meetings/{mid}"
+
         keyboard = {"inline_keyboard": [
             [
                 {"text": "📄 Транскрипт .txt", "callback_data": f"dl:{mid}:txt"},
                 {"text": "💬 AI-чат", "callback_data": f"chat:{mid}"},
             ],
             [
-                {"text": "🌐 Открыть на сайте", "url": f"{APP_URL}/meetings/{mid}"},
+                {"text": "🌐 Открыть на сайте", "url": magic_url},
             ],
         ]}
 
