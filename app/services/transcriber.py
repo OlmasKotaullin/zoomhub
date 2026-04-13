@@ -79,19 +79,27 @@ async def _transcribe_via_groq(file_path: str) -> dict | None:
 
 
 async def transcribe_file(file_path: str, user_id: int | None = None) -> dict:
-    """Транскрибирует файл: Groq (≤25MB, быстро) → configured provider (fallback).
+    """Транскрибирует файл: RunPod (наш сервер, primary) → Groq (fallback).
 
     user_id: если передан, провайдер использует личную Telegram-сессию пользователя.
 
     Returns:
         {"full_text": str, "segments": list[dict]}
     """
-    # Try Groq first (fast, free, ≤25 MB)
+    # Primary: configured provider (RunPod — наш оплаченный сервер)
+    provider = get_transcription_provider()
+    try:
+        logger.info(f"Транскрипция через {provider.name}: {file_path}")
+        result = await provider.transcribe(file_path, user_id=user_id)
+        if result and result.get("full_text"):
+            return result
+        logger.warning(f"{provider.name} вернул пустой результат, пробую Groq...")
+    except Exception as e:
+        logger.warning(f"{provider.name} ошибка: {e}, пробую Groq...")
+
+    # Fallback: Groq Whisper API (бесплатный, быстрый, ≤25 MB)
     result = await _transcribe_via_groq(file_path)
     if result and result.get("full_text"):
         return result
 
-    # Fallback to configured provider (RunPod/Bukvitsa/etc)
-    provider = get_transcription_provider()
-    logger.info(f"Транскрипция через {provider.name}: {file_path}")
-    return await provider.transcribe(file_path, user_id=user_id)
+    raise RuntimeError(f"Все провайдеры транскрипции не справились: {file_path}")
