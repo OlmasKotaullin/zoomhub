@@ -737,15 +737,11 @@ async def _handle_help(chat_id: str):
     """Send help message."""
     await _tg_send_cmd(
         chat_id,
-        "*ZoomHub — рабочая память встреч*\n\n"
-        "*Как пользоваться:*\n"
-        "Отправьте аудио или видео — через 2-3 мин получите конспект с задачами.\n\n"
-        "*Кнопки внизу:*\n"
-        "📋 Мои записи — список обработанных встреч\n"
-        "📊 Тариф — лимиты и остаток часов\n"
-        "🌐 Веб-кабинет — полный интерфейс на сайте\n\n"
-        "*Форматы:* MP3, M4A, MP4, WAV, OGG, WebM (до 2 ГБ)\n"
-        "*Голосовые:* в AI-чате можно задавать вопросы голосом 🎤",
+        "Как вам помочь?",
+        reply_markup={"inline_keyboard": [
+            [{"text": "📖 Справка — как пользоваться", "callback_data": "help:faq"}],
+            [{"text": "✉️ Написать основателю", "url": "https://t.me/almaz_gataullin"}],
+        ]},
     )
 
 
@@ -1173,6 +1169,20 @@ async def _handle_callback(callback: dict):
     if data == "media_stay":
         _pending_media.pop(chat_id, None)
         await _tg_send(chat_id, "Продолжаем. Задайте вопрос по записи.")
+        return
+
+    if data == "help:faq":
+        await _tg_send(
+            chat_id,
+            "*Как пользоваться ZoomHub*\n\n"
+            "*1.* Отправьте аудио или видео — через 2-3 мин получите конспект с задачами.\n\n"
+            "*2.* Кнопки внизу:\n"
+            "📋 Мои записи — список встреч\n"
+            "📊 Тариф — лимиты и часы\n"
+            "🌐 Веб-кабинет — полный интерфейс\n\n"
+            "*Форматы:* MP3, M4A, MP4, WAV, OGG, WebM (до 2 ГБ)\n"
+            "*Голосовые:* в AI-чате можно задавать вопросы голосом 🎤",
+        )
         return
 
     match = CALLBACK_PATTERN.match(data)
