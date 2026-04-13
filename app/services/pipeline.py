@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import subprocess
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError
@@ -136,6 +137,18 @@ def _get_user_id(meeting_id: int) -> int | None:
         db.close()
 
 
+@_db_retry
+def _update_audio_path(meeting_id: int, audio_path: str):
+    db = SessionLocal()
+    try:
+        m = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+        if m:
+            m.audio_path = audio_path
+            db.commit()
+    finally:
+        db.close()
+
+
 def _get_meeting_source(meeting_id: int) -> str | None:
     db = SessionLocal()
     try:
@@ -160,6 +173,53 @@ def _get_duration_ffprobe(audio_path: str) -> int:
     return 0
 
 
+def _is_video_file(file_path: str) -> bool:
+    """Check if file is a video format that needs audio extraction."""
+    video_exts = {".webm", ".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv"}
+    return Path(file_path).suffix.lower() in video_exts
+
+
+async def _extract_audio(file_path: str) -> str:
+    """Extract audio from video file via ffmpeg. Returns path to audio file.
+
+    350 MB WebM → ~20 MB opus (94% reduction).
+    If extraction fails, returns original file.
+    """
+    src = Path(file_path)
+    if not _is_video_file(file_path):
+        return file_path
+
+    extracted = src.parent / f"{src.stem}_audio.opus"
+    if extracted.exists():
+        return str(extracted)
+
+    src_size_mb = src.stat().st_size / 1024 / 1024
+    logger.info(f"Extracting audio from video {src.name} ({src_size_mb:.0f} MB)...")
+
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-i", file_path,
+        "-vn",              # no video
+        "-ac", "1",         # mono
+        "-ar", "16000",     # 16 kHz
+        "-c:a", "libopus",  # opus codec
+        "-b:a", "24k",      # 24 kbps
+        "-y", str(extracted),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+
+    if proc.returncode != 0 or not extracted.exists():
+        logger.warning(f"Audio extraction failed (rc={proc.returncode}), using original")
+        return file_path
+
+    new_size_mb = extracted.stat().st_size / 1024 / 1024
+    reduction = int((1 - new_size_mb / src_size_mb) * 100) if src_size_mb > 0 else 0
+    logger.info(f"Audio extracted: {src_size_mb:.0f} MB → {new_size_mb:.1f} MB ({reduction}% reduction)")
+
+    return str(extracted)
+
+
 async def process_meeting(meeting_id: int, download_url: str | None = None, access_token: str | None = None):
     """Фоновая обработка записи: скачивание → транскрибация → конспект."""
     try:
@@ -181,12 +241,19 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
                 _update_status(meeting_id, MeetingStatus.error, f"Ошибка скачивания: {e}")
                 return
 
-        # Шаг 2: Транскрибация через Буквицу
+        # Шаг 1.5: Извлечение аудио из видео (WebM 350MB → opus 20MB)
         audio_path = _get_audio_path(meeting_id)
         if not audio_path:
             _update_status(meeting_id, MeetingStatus.error, "Нет аудиофайла")
             return
 
+        if _is_video_file(audio_path):
+            logger.info(f"[{meeting_id}] Видеофайл — извлекаю аудио...")
+            audio_path = await _extract_audio(audio_path)
+            # Update path in DB to use extracted audio
+            _update_audio_path(meeting_id, audio_path)
+
+        # Шаг 2: Транскрипция
         try:
             _update_status(meeting_id, MeetingStatus.transcribing)
             logger.info(f"[{meeting_id}] Начинаю транскрибацию: {audio_path}")
