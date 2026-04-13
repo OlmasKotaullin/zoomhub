@@ -43,6 +43,10 @@ _last_cmd_msg: dict[str, int] = {}
 _pending_reg: dict[str, dict] = {}  # chat_id -> {"step": "name"|"email", "name": str, "invite_code": str, "ts": float}
 _REG_TTL = 600  # 10 minutes timeout
 
+# Support mode: waiting for user's support message
+_pending_support: dict[str, float] = {}  # chat_id -> timestamp
+_SUPPORT_TTL = 300  # 5 minutes timeout
+
 # ──────────────── Persistent Reply Keyboards ────────────────
 
 MAIN_KEYBOARD = {
@@ -545,6 +549,14 @@ async def telegram_webhook(request: Request):
         asyncio.create_task(_handle_chat_message(chat_id, text))
         return {"ok": True}
 
+    # Priority 3.5: Support message (user clicked "Написать в поддержку")
+    if text and chat_id in _pending_support:
+        import time
+        ts = _pending_support.pop(chat_id)
+        if time.time() - ts < _SUPPORT_TTL:
+            asyncio.create_task(_create_support_ticket(chat_id, text))
+            return {"ok": True}
+
     # Priority 4: Telegram registration flow
     if text and chat_id in _pending_reg:
         import time
@@ -733,6 +745,56 @@ async def _handle_start(chat_id: str, text: str):
         db.close()
 
 
+async def _create_support_ticket(chat_id: str, text: str):
+    """Create support ticket and notify admins."""
+    from app.models import SupportTicket
+    db = SessionLocal()
+    try:
+        user = _find_user_by_chat_id(chat_id, db)
+        if not user:
+            await _tg_send(chat_id, "Аккаунт не найден. Напишите /start для подключения.")
+            return
+
+        ticket = SupportTicket(
+            user_id=user.id,
+            subject="Telegram",
+            message=text[:2000],
+            category="support",
+            status="new",
+        )
+        db.add(ticket)
+        db.commit()
+        db.refresh(ticket)
+
+        await _tg_send(
+            chat_id,
+            f"✅ *Обращение #{ticket.id} создано*\n\n"
+            f"Ваш вопрос получен, ответим в ближайшее время.",
+            reply_markup=MAIN_KEYBOARD,
+        )
+
+        # Notify all admins via Telegram
+        admins = db.query(User).filter(User.is_admin == True).all()
+        for admin in admins:
+            if admin.telegram_chat_id:
+                plan = user.plan or "free"
+                await _tg_send(
+                    admin.telegram_chat_id,
+                    f"🔔 *Тикет #{ticket.id}*\n"
+                    f"От: {user.name} ({user.email})\n"
+                    f"Тариф: {plan}\n\n"
+                    f"{text[:500]}",
+                    reply_markup={"inline_keyboard": [[
+                        {"text": "📋 Открыть тикеты", "url": f"{APP_URL}/admin/tickets"},
+                    ]]},
+                )
+    except Exception as e:
+        logger.error(f"Support ticket error: {e}", exc_info=True)
+        await _tg_send(chat_id, "Не удалось отправить. Попробуйте позже.")
+    finally:
+        db.close()
+
+
 async def _handle_help(chat_id: str):
     """Send help message."""
     await _tg_send_cmd(
@@ -740,7 +802,7 @@ async def _handle_help(chat_id: str):
         "Как вам помочь?",
         reply_markup={"inline_keyboard": [
             [{"text": "📖 Справка — как пользоваться", "callback_data": "help:faq"}],
-            [{"text": "✉️ Написать основателю", "url": "https://t.me/almaz_gataullin"}],
+            [{"text": "✉️ Написать в поддержку", "callback_data": "help:support"}],
         ]},
     )
 
@@ -1182,6 +1244,17 @@ async def _handle_callback(callback: dict):
             "🌐 Веб-кабинет — полный интерфейс\n\n"
             "*Форматы:* MP3, M4A, MP4, WAV, OGG, WebM (до 2 ГБ)\n"
             "*Голосовые:* в AI-чате можно задавать вопросы голосом 🎤",
+        )
+        return
+
+    if data == "help:support":
+        import time
+        _pending_support[chat_id] = time.time()
+        await _tg_send(
+            chat_id,
+            "✉️ *Поддержка ZoomHub*\n\n"
+            "Опишите вопрос или проблему одним сообщением — я передам команде.\n\n"
+            "_Отправьте текст прямо сейчас:_",
         )
         return
 
