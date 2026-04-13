@@ -48,7 +48,7 @@ _pending_support: dict[str, float] = {}  # chat_id -> timestamp
 _SUPPORT_TTL = 300  # 5 minutes timeout
 
 # Semaphore: limit concurrent pipeline processing (downloads + transcription)
-_pipeline_sem = asyncio.Semaphore(2)  # max 2 simultaneous recordings
+_pipeline_sem = asyncio.Semaphore(4)  # max 4 simultaneous recordings (shared-cpu-2x, 2GB RAM)
 
 # ──────────────── Persistent Reply Keyboards ────────────────
 
