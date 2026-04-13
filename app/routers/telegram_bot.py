@@ -599,15 +599,16 @@ async def telegram_webhook(request: Request):
                     await _tg_send(chat_id, "Этот email уже зарегистрирован. Введите другой:")
                     return {"ok": True}
 
-                # Create user
+                # Create user with readable password
                 import secrets
                 from app.auth import hash_password
                 from app.models import InviteCode
 
+                raw_password = _sec.token_urlsafe(8)  # short, readable password
                 user = User(
                     name=reg["name"],
                     email=email,
-                    hashed_password=hash_password(secrets.token_urlsafe(32)),
+                    hashed_password=hash_password(raw_password),
                     telegram_chat_id=chat_id,
                     notify_telegram=True,
                     onboarding_completed=True,
@@ -637,6 +638,9 @@ async def telegram_webhook(request: Request):
                     chat_id,
                     f"✅ *Готово, {reg['name']}!*\n\n"
                     f"Аккаунт создан. Бесплатно: 4 ч транскрипции в месяц.\n\n"
+                    f"*Вход на сайт:*\n"
+                    f"Email: `{email}`\n"
+                    f"Пароль: `{raw_password}`\n\n"
                     f"Отправьте аудио или видео — конспект будет через 2-3 мин.",
                     reply_markup=MAIN_KEYBOARD,
                 )
