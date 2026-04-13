@@ -47,6 +47,9 @@ _REG_TTL = 600  # 10 minutes timeout
 _pending_support: dict[str, float] = {}  # chat_id -> timestamp
 _SUPPORT_TTL = 300  # 5 minutes timeout
 
+# Semaphore: limit concurrent pipeline processing (downloads + transcription)
+_pipeline_sem = asyncio.Semaphore(2)  # max 2 simultaneous recordings
+
 # ──────────────── Persistent Reply Keyboards ────────────────
 
 MAIN_KEYBOARD = {
@@ -971,6 +974,27 @@ async def _handle_meetings(chat_id: str):
 
 async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
     """Download media from Telegram, create Meeting, run pipeline."""
+    # Queue if too many concurrent downloads
+    if _pipeline_sem.locked():
+        queue_msg = await _tg_send(chat_id,
+            "⏳ В очереди на обработку...\n"
+            "Сейчас обрабатываются другие записи. Ваша начнётся автоматически.")
+        async with _pipeline_sem:
+            # Delete queue message when slot opens
+            if queue_msg and queue_msg.get("ok"):
+                try:
+                    await _tg_api("deleteMessage", chat_id=chat_id,
+                                  message_id=queue_msg["result"]["message_id"])
+                except Exception:
+                    pass
+            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id)
+    else:
+        async with _pipeline_sem:
+            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id)
+
+
+async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
+    """Inner media handler — runs inside semaphore."""
     db = SessionLocal()
     try:
         # Find user
