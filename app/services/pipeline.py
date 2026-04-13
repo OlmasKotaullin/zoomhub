@@ -217,6 +217,13 @@ async def _extract_audio(file_path: str) -> str:
     reduction = int((1 - new_size_mb / src_size_mb) * 100) if src_size_mb > 0 else 0
     logger.info(f"Audio extracted: {src_size_mb:.0f} MB → {new_size_mb:.1f} MB ({reduction}% reduction)")
 
+    # Delete original video to free disk space (keep only extracted audio)
+    try:
+        src.unlink()
+        logger.info(f"Deleted original video: {src.name} ({src_size_mb:.0f} MB freed)")
+    except Exception as e:
+        logger.warning(f"Could not delete original video: {e}")
+
     return str(extracted)
 
 

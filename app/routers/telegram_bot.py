@@ -1026,11 +1026,11 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
             )
             return
 
-        # Check file size — hard limit 2 GB (Telegram max)
-        if file_size > 2 * 1024 * 1024 * 1024:
+        # Check file size — hard limit 4 GB (Telegram Premium max, Telethon supports it)
+        if file_size > 4 * 1024 * 1024 * 1024:
             await _tg_send(
                 chat_id,
-                f"Файл слишком большой ({file_size / 1024 / 1024:.0f} МБ, лимит 2 ГБ).\n"
+                f"Файл слишком большой ({file_size / 1024 / 1024:.0f} МБ, лимит 4 ГБ).\n"
                 f"Загрузите через сайт: {APP_URL}",
                 reply_markup={"inline_keyboard": [[{
                     "text": "Загрузить на сайте",
@@ -1300,7 +1300,7 @@ async def _handle_callback(callback: dict):
             "📋 Мои записи — список встреч\n"
             "📊 Тариф — лимиты и часы\n"
             "🌐 Веб-кабинет — полный интерфейс\n\n"
-            "*Форматы:* MP3, M4A, MP4, WAV, OGG, WebM (до 2 ГБ)\n"
+            "*Форматы:* MP3, M4A, MP4, WAV, OGG, WebM (до 4 ГБ)\n"
             "*Голосовые:* в AI-чате можно задавать вопросы голосом 🎤",
         )
         return
