@@ -521,9 +521,17 @@ async def telegram_webhook(request: Request):
             await _handle_help(chat_id)
         return {"ok": True}
 
-    # Priority 2: Media handling (depends on chat mode)
+    # Priority 1.8: Voice in support mode → transcribe and create ticket
     file_id, filename, file_size = _extract_media(message)
     message_id = message.get("message_id", 0)
+    if file_id and "voice" in message and chat_id in _pending_support:
+        import time
+        ts = _pending_support.pop(chat_id)
+        if time.time() - ts < _SUPPORT_TTL:
+            asyncio.create_task(_handle_voice_support(chat_id, file_id, file_size, message_id))
+            return {"ok": True}
+
+    # Priority 2: Media handling (depends on chat mode)
     if file_id:
         if in_chat and "voice" in message:
             # Voice in chat mode → transcribe and send as AI question
@@ -743,6 +751,24 @@ async def _handle_start(chat_id: str, text: str):
                 )
     finally:
         db.close()
+
+
+async def _handle_voice_support(chat_id: str, file_id: str, file_size: int, message_id: int):
+    """Transcribe voice message and create support ticket from text."""
+    try:
+        async with _typing_loop(chat_id):
+            text = await _transcribe_voice_groq(file_id)
+
+        if not text:
+            await _tg_send(chat_id, "Не удалось распознать голосовое. Напишите текстом.")
+            return
+
+        await _tg_send(chat_id, f"🎤 _{text}_", parse_mode="Markdown")
+        await _create_support_ticket(chat_id, text)
+
+    except Exception as e:
+        logger.error(f"Voice support error: {e}", exc_info=True)
+        await _tg_send(chat_id, "Ошибка. Попробуйте написать текстом.")
 
 
 async def _create_support_ticket(chat_id: str, text: str):
