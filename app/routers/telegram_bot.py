@@ -43,6 +43,32 @@ _last_cmd_msg: dict[str, int] = {}
 _pending_reg: dict[str, dict] = {}  # chat_id -> {"step": "name"|"email", "name": str, "invite_code": str, "ts": float}
 _REG_TTL = 600  # 10 minutes timeout
 
+# ──────────────── Persistent Reply Keyboards ────────────────
+
+MAIN_KEYBOARD = {
+    "keyboard": [
+        [{"text": "📋 Мои записи"}, {"text": "📊 Тариф"}],
+        [{"text": "🌐 Веб-кабинет"}, {"text": "❓ Помощь"}],
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
+
+CHAT_KEYBOARD = {
+    "keyboard": [[{"text": "❌ Завершить чат"}]],
+    "resize_keyboard": True,
+    "is_persistent": True,
+}
+
+# Button text → handler mapping (checked BEFORE AI-chat)
+_BUTTON_ROUTES = {
+    "📋 Мои записи": "meetings",
+    "📊 Тариф": "plan",
+    "🌐 Веб-кабинет": "web",
+    "❓ Помощь": "help",
+    "❌ Завершить чат": "exit",
+}
+
 
 async def _tg_send_cmd(chat_id: str, text: str, **kwargs) -> dict | None:
     """Send a command response and remember its ID for cleanup on next command."""
@@ -449,7 +475,8 @@ async def telegram_webhook(request: Request):
     if text == "/exit":
         if in_chat:
             _set_chat_meeting_id(chat_id, None)
-            await _tg_send_cmd(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
+            await _tg_send_cmd(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.",
+                               reply_markup=MAIN_KEYBOARD)
         else:
             await _tg_send_cmd(chat_id, "Вы не в AI-чате. Отправьте аудио для транскрипции.")
         return {"ok": True}
@@ -468,6 +495,26 @@ async def telegram_webhook(request: Request):
 
     if text.startswith("/meetings"):
         await _handle_meetings(chat_id)
+        return {"ok": True}
+
+    # Priority 1.5: Reply keyboard buttons (persistent bottom keyboard)
+    btn_route = _BUTTON_ROUTES.get(text)
+    if btn_route:
+        if btn_route == "exit":
+            if in_chat:
+                _set_chat_meeting_id(chat_id, None)
+                await _tg_send_cmd(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.",
+                                   reply_markup=MAIN_KEYBOARD)
+            else:
+                await _tg_send_cmd(chat_id, "Вы не в AI-чате. Отправьте аудио для транскрипции.")
+        elif btn_route == "meetings":
+            await _handle_meetings(chat_id)
+        elif btn_route == "plan":
+            await _handle_plan(chat_id)
+        elif btn_route == "web":
+            await _handle_web(chat_id)
+        elif btn_route == "help":
+            await _handle_help(chat_id)
         return {"ok": True}
 
     # Priority 2: Media handling (depends on chat mode)
@@ -567,7 +614,8 @@ async def telegram_webhook(request: Request):
                     chat_id,
                     f"✅ *Готово, {reg['name']}!*\n\n"
                     f"Аккаунт создан. Бесплатно: 4 ч транскрипции в месяц.\n\n"
-                    f"Отправьте аудио или видео — конспект будет через 2-3 мин."
+                    f"Отправьте аудио или видео — конспект будет через 2-3 мин.",
+                    reply_markup=MAIN_KEYBOARD,
                 )
             finally:
                 db.close()
@@ -578,7 +626,8 @@ async def telegram_webhook(request: Request):
         await _tg_send(
             chat_id,
             "Отправьте аудио или видео для транскрипции.\n"
-            "Поддерживаемые форматы: MP3, M4A, MP4, WAV, OGG, WebM."
+            "Поддерживаемые форматы: MP3, M4A, MP4, WAV, OGG, WebM.",
+            reply_markup=MAIN_KEYBOARD,
         )
 
     return {"ok": True}
@@ -607,7 +656,8 @@ async def _handle_start(chat_id: str, text: str):
                     chat_id,
                     f"*Привет, {existing_user.name}!*\n\n"
                     f"Ваш аккаунт уже подключён.\n"
-                    f"Отправьте аудио или видео для транскрипции."
+                    f"Отправьте аудио или видео для транскрипции.",
+                    reply_markup=MAIN_KEYBOARD,
                 )
                 return
 
@@ -646,7 +696,8 @@ async def _handle_start(chat_id: str, text: str):
                         f"*Привет, {user.name}!* 👋\n\n"
                         f"Telegram подключён к ZoomHub.\n"
                         f"Отправьте аудио или видео — конспект за 2-3 мин.\n\n"
-                        f"Бесплатно {user.plan_hours_limit or 4} ч/мес."
+                        f"Бесплатно {user.plan_hours_limit or 4} ч/мес.",
+                        reply_markup=MAIN_KEYBOARD,
                     )
                     return
 
@@ -665,7 +716,8 @@ async def _handle_start(chat_id: str, text: str):
                     chat_id,
                     f"*Привет, {existing_user.name}!*\n\n"
                     f"Ваш аккаунт уже подключён.\n"
-                    f"Отправьте аудио или видео для транскрипции."
+                    f"Отправьте аудио или видео для транскрипции.",
+                    reply_markup=MAIN_KEYBOARD,
                 )
             else:
                 await _tg_send(
@@ -1175,7 +1227,8 @@ async def _handle_callback(callback: dict):
                 chat_id, tpl["prompt"], meeting.id, placeholder_id))
         elif action == "exit":
             _set_chat_meeting_id(chat_id, None)
-            await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.")
+            await _tg_send(chat_id, "Чат завершён. Отправьте аудио для новой транскрипции.",
+                           reply_markup=MAIN_KEYBOARD)
     finally:
         db.close()
 
@@ -1329,8 +1382,11 @@ async def _enter_chat_mode(chat_id: str, meeting: Meeting, user: User):
             pass
 
     title = meeting.title or "Запись"
-    msg = f"💬 *AI-чат:* {title}\n\nЗадайте вопрос текстом или голосовым 🎤\nИли нажмите шаблон:"
 
+    # Switch bottom keyboard to chat mode
+    await _tg_send(chat_id, f"💬 *AI-чат:* {title}", reply_markup=CHAT_KEYBOARD)
+
+    msg = "Задайте вопрос текстом или голосовым 🎤\nИли нажмите шаблон:"
     result = await _tg_send(chat_id, msg, reply_markup=_chat_keyboard(meeting.id))
     if result and result.get("ok"):
         _last_chat_welcome[chat_id] = result["result"]["message_id"]
