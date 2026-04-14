@@ -977,85 +977,89 @@ async def _handle_meetings(chat_id: str):
 # ──────────────── Media processing ────────────────
 
 async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
-    """Download media from Telegram, create Meeting, run pipeline."""
-    # Immediate acknowledgment — user sees this right away
-    size_mb = file_size / (1024 * 1024) if file_size else 0
-    size_info = f" ({size_mb:.0f} МБ)" if size_mb > 5 else ""
+    """Download media from Telegram, create Meeting, run pipeline.
 
-    if _pipeline_sem.locked():
-        resp = await _tg_send(chat_id,
-            f"📥 *Запись получена*{size_info}\n\n"
-            f"В очереди — начну обработку автоматически.")
+    Single function — no inner/outer split. Progress message sent BEFORE semaphore.
+    """
+    progress_msg_id = 0
+
+    try:
+        # ── Step 0: Immediate acknowledgment (BEFORE semaphore) ──
+        size_mb = file_size / (1024 * 1024) if file_size else 0
+        size_info = f" ({size_mb:.0f} МБ)" if size_mb > 5 else ""
+
+        if _pipeline_sem.locked():
+            resp = await _tg_send(chat_id,
+                f"📥 *Запись получена*{size_info}\n\n"
+                f"В очереди — начну обработку автоматически.")
+        else:
+            resp = await _tg_send(chat_id,
+                f"📥 *Запись получена*{size_info}\n\n"
+                f"Скачиваю файл...\n"
+                f"Конспект будет готов через 3-5 мин.")
         progress_msg_id = resp.get("result", {}).get("message_id", 0) if resp else 0
+
+        # ── Wait for semaphore slot ──
         async with _pipeline_sem:
-            if progress_msg_id:
-                await _tg_edit(chat_id, progress_msg_id,
-                    f"📥 *Запись получена*{size_info}\n\n"
-                    f"Скачиваю файл...\n"
-                    f"Конспект будет готов через 3-5 мин.")
-            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id, progress_msg_id)
-    else:
-        resp = await _tg_send(chat_id,
-            f"📥 *Запись получена*{size_info}\n\n"
-            f"Скачиваю файл...\n"
-            f"Конспект будет готов через 3-5 мин.")
-        progress_msg_id = resp.get("result", {}).get("message_id", 0) if resp else 0
-        async with _pipeline_sem:
-            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id, progress_msg_id)
+            await _handle_media_process(chat_id, file_id, filename, file_size,
+                                        message_id, progress_msg_id)
+
+    except Exception as e:
+        logger.error(f"Telegram media handler error: {e}", exc_info=True)
+        if progress_msg_id:
+            try:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+            except Exception:
+                pass
+        await _tg_send(chat_id, "Не удалось обработать файл. Попробуйте отправить ещё раз.")
 
 
-async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_size: int,
-                              message_id: int = 0, progress_msg_id: int = 0):
-    """Inner media handler — runs inside semaphore. progress_msg_id from _handle_media."""
+async def _handle_media_process(chat_id: str, file_id: str, filename: str, file_size: int,
+                                message_id: int, progress_msg_id: int):
+    """Full processing: validate → download → pipeline → result. Runs inside semaphore."""
     db = SessionLocal()
     try:
-        # Find user
+        # ── Validate user ──
         user = _find_user_by_chat_id(chat_id, db)
         if not user:
-            await _tg_send(
-                chat_id,
-                "Аккаунт не подключён.\n"
-                f"Подключите Telegram в настройках: {APP_URL}/settings"
-            )
+            if progress_msg_id:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+            await _tg_send(chat_id, f"Аккаунт не подключён.\nПодключите: {APP_URL}/settings")
             return
 
-        # Check usage limit
         ok, used, limit = _check_usage_limit(user, db)
         if not ok:
-            await _tg_send(
-                chat_id,
+            if progress_msg_id:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+            await _tg_send(chat_id,
                 f"⚠️ Лимит исчерпан: {used:.1f} из {limit:.0f} ч/мес\n\n"
-                f"Тариф *{user.plan or 'free'}* — {limit:.0f} ч/мес.\n"
-                f"Для увеличения лимита — тариф Старт (30ч) за 499 ₽/мес.",
+                f"Тариф *{user.plan or 'free'}* — {limit:.0f} ч/мес.",
                 reply_markup={"inline_keyboard": [[{
-                    "text": "Посмотреть тарифы",
-                    "url": f"{APP_URL}/settings#billing"
-                }]]}
-            )
+                    "text": "Посмотреть тарифы", "url": f"{APP_URL}/settings#billing"}]]})
             return
 
-        # Check file size — hard limit 4 GB (Telegram Premium max, Telethon supports it)
         if file_size > 4 * 1024 * 1024 * 1024:
-            await _tg_send(
-                chat_id,
-                f"Файл слишком большой ({file_size / 1024 / 1024:.0f} МБ, лимит 4 ГБ).\n"
-                f"Загрузите через сайт: {APP_URL}",
-                reply_markup={"inline_keyboard": [[{
-                    "text": "Загрузить на сайте",
-                    "url": f"{APP_URL}/meetings/upload"
-                }]]}
-            )
+            if progress_msg_id:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+            await _tg_send(chat_id,
+                f"Файл слишком большой ({file_size / 1024 / 1024:.0f} МБ, лимит 4 ГБ).\nЗагрузите: {APP_URL}")
             return
 
-        # progress_msg_id already created by _handle_media (before semaphore)
+        # ── Update progress: downloading ──
+        if progress_msg_id:
+            size_info = f" ({file_size / 1024 / 1024:.0f} МБ)" if file_size > 5 * 1024 * 1024 else ""
+            await _tg_edit(chat_id, progress_msg_id,
+                f"⏳ *Обрабатываю запись*{size_info}\n\n"
+                f"🔄 Скачиваю файл...\n"
+                f"⬜ Транскрипция\n"
+                f"⬜ Генерация конспекта")
 
-        # Create meeting
+        # ── Create meeting ──
         ext = Path(filename).suffix.lower() or ".ogg"
         if ext not in ALLOWED_EXTENSIONS:
             ext = ".ogg"
 
         title = Path(filename).stem or "Telegram"
-        # Replace generic Telegram filenames (audio1762075285, video_2026_04_14, etc.)
         import re
         if title in ("voice", "audio", "video", "videonote", "document") \
            or re.match(r'^(audio|video|voice|document)\d+$', title):
@@ -1063,16 +1067,13 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
             title = f"Запись {datetime.now().strftime('%d.%m.%Y %H:%M')}"
 
         meeting = Meeting(
-            user_id=user.id,
-            title=title,
-            source=MeetingSource.telegram,
-            status=MeetingStatus.transcribing,
-        )
+            user_id=user.id, title=title,
+            source=MeetingSource.telegram, status=MeetingStatus.transcribing)
         db.add(meeting)
         db.commit()
         db.refresh(meeting)
 
-        # Download file
+        # ── Download file ──
         meeting_dir = RECORDINGS_DIR / str(meeting.id)
         meeting_dir.mkdir(parents=True, exist_ok=True)
         file_path = meeting_dir / f"original{ext}"
@@ -1085,19 +1086,18 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
             db.commit()
             if progress_msg_id:
                 await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
-            await _tg_send(chat_id, "Не удалось скачать файл. Попробуйте ещё раз или загрузите через сайт.")
+            await _tg_send(chat_id, "Не удалось скачать файл. Попробуйте ещё раз.")
             return
 
         meeting.audio_path = str(file_path)
 
-        # Check minimum duration (reject files < 5 sec)
+        # ── Check minimum duration ──
         try:
             import subprocess
             probe = subprocess.run(
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                  "-of", "default=noprint_wrappers=1:nokey=1", str(file_path)],
-                capture_output=True, text=True, timeout=10
-            )
+                capture_output=True, text=True, timeout=10)
             duration = float(probe.stdout.strip()) if probe.returncode == 0 else 0
             if 0 < duration < 5:
                 meeting.status = MeetingStatus.error
@@ -1105,75 +1105,63 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
                 db.commit()
                 if progress_msg_id:
                     await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
-                await _tg_send(chat_id, "Файл слишком короткий (менее 5 секунд). Отправьте запись длиннее.")
+                await _tg_send(chat_id, "Файл слишком короткий (менее 5 секунд).")
                 return
         except Exception:
-            pass  # ffprobe failed — continue anyway
+            pass
 
         db.commit()
 
-        # Update progress: download done
+        # ── Update progress: download done ──
         if progress_msg_id:
             await _tg_edit(chat_id, progress_msg_id,
-                           "⏳ *Обрабатываю запись...*\n\n"
-                           "✅ Файл скачан\n"
-                           "🔄 Транскрибирую речь...\n"
-                           "⬜ Генерация конспекта")
+                "⏳ *Обрабатываю запись...*\n\n"
+                "✅ Файл скачан\n"
+                "🔄 Транскрибирую речь...\n"
+                "⬜ Генерация конспекта")
 
         logger.info(f"Telegram upload: meeting {meeting.id} from user {user.id} ({filename})")
 
-        # Run pipeline in background
-        asyncio.create_task(_run_pipeline_and_notify(chat_id, meeting.id, progress_msg_id))
-
-    except Exception as e:
-        logger.error(f"Telegram media handler error: {e}", exc_info=True)
-        await _tg_send(chat_id, "Не удалось обработать файл. Попробуйте отправить ещё раз.")
-    finally:
-        db.close()
-
-
-async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
-    """Run pipeline in background, then send result to Telegram."""
-    try:
+        # ── Pipeline: transcription + summary ──
         from app.services.pipeline import process_meeting
 
         async def _progress(step: str):
             if not progress_msg_id:
                 return
-            if step == "transcribing":
-                await _tg_edit(chat_id, progress_msg_id,
-                               "⏳ *Обрабатываю запись...*\n\n"
-                               "✅ Файл скачан\n"
-                               "🔄 Транскрибирую речь...\n"
-                               "⬜ Генерация конспекта")
-            elif step == "summarizing":
-                await _tg_edit(chat_id, progress_msg_id,
-                               "⏳ *Почти готово...*\n\n"
-                               "✅ Файл скачан\n"
-                               "✅ Речь распознана\n"
-                               "🔄 Генерирую конспект...")
+            try:
+                if step == "transcribing":
+                    await _tg_edit(chat_id, progress_msg_id,
+                        "⏳ *Обрабатываю запись...*\n\n"
+                        "✅ Файл скачан\n"
+                        "🔄 Транскрибирую речь...\n"
+                        "⬜ Генерация конспекта")
+                elif step == "summarizing":
+                    await _tg_edit(chat_id, progress_msg_id,
+                        "⏳ *Почти готово...*\n\n"
+                        "✅ Файл скачан\n"
+                        "✅ Речь распознана\n"
+                        "🔄 Генерирую конспект...")
+            except Exception:
+                pass  # don't break pipeline if TG edit fails
 
-        await process_meeting(meeting_id, progress_callback=_progress)
+        await process_meeting(meeting.id, progress_callback=_progress)
 
-        # Smart title: replace generic names with first topic or TLDR
+        # ── Smart title ──
         try:
             import re as _re
             sdb = SessionLocal()
-            m = sdb.query(Meeting).filter(Meeting.id == meeting_id).first()
+            m = sdb.query(Meeting).filter(Meeting.id == meeting.id).first()
             if m and m.summary:
                 is_generic = (
-                    not m.title
-                    or m.title.startswith("Запись")
+                    not m.title or m.title.startswith("Запись")
                     or m.title == "Telegram"
-                    or bool(_re.match(r'^(audio|video|voice|document)\d*', m.title))
-                )
+                    or bool(_re.match(r'^(audio|video|voice|document)\d*', m.title)))
                 if is_generic:
                     new_title = None
                     if m.summary.topics:
                         t = m.summary.topics[0]
                         new_title = (t.get("topic", "") if isinstance(t, dict) else str(t))
                     if not new_title and m.summary.tldr:
-                        # First sentence of TLDR
                         new_title = m.summary.tldr.split(".")[0]
                     if new_title:
                         m.title = new_title[:80].rstrip(".")
@@ -1182,12 +1170,22 @@ async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_i
         except Exception:
             pass
 
-        await _send_result(chat_id, meeting_id, progress_msg_id)
+        # ── Send result ──
+        await _send_result(chat_id, meeting.id, progress_msg_id)
+
     except Exception as e:
-        logger.error(f"Pipeline error for meeting {meeting_id}: {e}", exc_info=True)
+        logger.error(f"Media process error: {e}", exc_info=True)
         if progress_msg_id:
-            await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+            try:
+                await _tg_api("deleteMessage", chat_id=chat_id, message_id=progress_msg_id)
+            except Exception:
+                pass
         await _tg_send(chat_id, "Произошла ошибка при обработке записи. Попробуйте отправить файл ещё раз.")
+    finally:
+        db.close()
+
+
+    # _run_pipeline_and_notify removed — all logic now in _handle_media_process
 
 
 async def _send_result(chat_id: str, meeting_id: int, progress_msg_id: int = 0):
