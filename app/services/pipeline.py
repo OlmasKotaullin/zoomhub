@@ -322,6 +322,47 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
             _update_status(meeting_id, MeetingStatus.error, str(e))
         except Exception:
             pass
+        # Alert admins
+        asyncio.create_task(_notify_admins_pipeline_error(meeting_id, str(e)))
+
+
+async def _notify_admins_pipeline_error(meeting_id: int, error: str):
+    """Send Telegram alert to all admins when pipeline fails."""
+    try:
+        import httpx
+        from app.config import TELEGRAM_BOT_TOKEN, APP_URL
+        if not TELEGRAM_BOT_TOKEN:
+            return
+
+        db = SessionLocal()
+        try:
+            meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+            user = db.query(User).filter(User.id == meeting.user_id).first() if meeting else None
+            admins = db.query(User).filter(User.is_admin == True).all()
+
+            title = meeting.title if meeting else f"#{meeting_id}"
+            user_info = f"{user.name} ({user.email})" if user else "unknown"
+
+            text = (
+                f"⚠️ *Ошибка обработки*\n\n"
+                f"Встреча: {title}\n"
+                f"Юзер: {user_info}\n"
+                f"Ошибка: {error[:300]}"
+            )
+
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            async with httpx.AsyncClient(timeout=10) as client:
+                for admin in admins:
+                    if admin.telegram_chat_id:
+                        await client.post(url, json={
+                            "chat_id": admin.telegram_chat_id,
+                            "text": text,
+                            "parse_mode": "Markdown",
+                        })
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Failed to notify admins: {e}")
 
 
 async def process_meeting_transcript_only(meeting_id: int):
