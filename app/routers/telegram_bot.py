@@ -978,27 +978,35 @@ async def _handle_meetings(chat_id: str):
 
 async def _handle_media(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
     """Download media from Telegram, create Meeting, run pipeline."""
-    # Queue if too many concurrent downloads
+    # Immediate acknowledgment — user sees this right away
+    size_mb = file_size / (1024 * 1024) if file_size else 0
+    size_info = f" ({size_mb:.0f} МБ)" if size_mb > 5 else ""
+
     if _pipeline_sem.locked():
-        queue_msg = await _tg_send(chat_id,
-            "⏳ В очереди на обработку...\n"
-            "Сейчас обрабатываются другие записи. Ваша начнётся автоматически.")
+        resp = await _tg_send(chat_id,
+            f"📥 *Запись получена*{size_info}\n\n"
+            f"В очереди — начну обработку автоматически.")
+        progress_msg_id = resp.get("result", {}).get("message_id", 0) if resp else 0
         async with _pipeline_sem:
-            # Delete queue message when slot opens
-            if queue_msg and queue_msg.get("ok"):
-                try:
-                    await _tg_api("deleteMessage", chat_id=chat_id,
-                                  message_id=queue_msg["result"]["message_id"])
-                except Exception:
-                    pass
-            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id)
+            if progress_msg_id:
+                await _tg_edit(chat_id, progress_msg_id,
+                    f"📥 *Запись получена*{size_info}\n\n"
+                    f"Скачиваю файл...\n"
+                    f"Конспект будет готов через 3-5 мин.")
+            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id, progress_msg_id)
     else:
+        resp = await _tg_send(chat_id,
+            f"📥 *Запись получена*{size_info}\n\n"
+            f"Скачиваю файл...\n"
+            f"Конспект будет готов через 3-5 мин.")
+        progress_msg_id = resp.get("result", {}).get("message_id", 0) if resp else 0
         async with _pipeline_sem:
-            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id)
+            await _handle_media_inner(chat_id, file_id, filename, file_size, message_id, progress_msg_id)
 
 
-async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_size: int, message_id: int = 0):
-    """Inner media handler — runs inside semaphore."""
+async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_size: int,
+                              message_id: int = 0, progress_msg_id: int = 0):
+    """Inner media handler — runs inside semaphore. progress_msg_id from _handle_media."""
     db = SessionLocal()
     try:
         # Find user
@@ -1039,16 +1047,7 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
             )
             return
 
-        # Progress message — visible immediately
-        size_mb = file_size / (1024 * 1024) if file_size else 0
-        size_info = f" ({size_mb:.0f} МБ)" if size_mb > 5 else ""
-        progress_text = (
-            f"📥 *Запись получена*{size_info}\n\n"
-            f"Скачиваю файл...\n"
-            f"Конспект будет готов через 3-5 мин."
-        )
-        resp = await _tg_send(chat_id, progress_text)
-        progress_msg_id = resp.get("result", {}).get("message_id", 0)
+        # progress_msg_id already created by _handle_media (before semaphore)
 
         # Create meeting
         ext = Path(filename).suffix.lower() or ".ogg"
