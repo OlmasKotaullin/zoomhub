@@ -1056,7 +1056,10 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
             ext = ".ogg"
 
         title = Path(filename).stem or "Telegram"
-        if title in ("voice", "audio", "video", "videonote", "document"):
+        # Replace generic Telegram filenames (audio1762075285, video_2026_04_14, etc.)
+        import re
+        if title in ("voice", "audio", "video", "videonote", "document") \
+           or re.match(r'^(audio|video|voice|document)\d+$', title):
             from datetime import datetime
             title = f"Запись {datetime.now().strftime('%d.%m.%Y %H:%M')}"
 
@@ -1153,20 +1156,29 @@ async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_i
 
         await process_meeting(meeting_id, progress_callback=_progress)
 
-        # Smart title: replace generic "Запись DD.MM" with first topic or TLDR
+        # Smart title: replace generic names with first topic or TLDR
         try:
+            import re as _re
             sdb = SessionLocal()
             m = sdb.query(Meeting).filter(Meeting.id == meeting_id).first()
-            if m and m.title and m.title.startswith("Запись") and m.summary:
-                new_title = None
-                if m.summary.topics:
-                    t = m.summary.topics[0]
-                    new_title = (t.get("topic", "") if isinstance(t, dict) else str(t))
-                if not new_title and m.summary.tldr:
-                    new_title = m.summary.tldr
-                if new_title:
-                    m.title = new_title[:80].rstrip(".")
-                    sdb.commit()
+            if m and m.summary:
+                is_generic = (
+                    not m.title
+                    or m.title.startswith("Запись")
+                    or m.title == "Telegram"
+                    or bool(_re.match(r'^(audio|video|voice|document)\d*', m.title))
+                )
+                if is_generic:
+                    new_title = None
+                    if m.summary.topics:
+                        t = m.summary.topics[0]
+                        new_title = (t.get("topic", "") if isinstance(t, dict) else str(t))
+                    if not new_title and m.summary.tldr:
+                        # First sentence of TLDR
+                        new_title = m.summary.tldr.split(".")[0]
+                    if new_title:
+                        m.title = new_title[:80].rstrip(".")
+                        sdb.commit()
             sdb.close()
         except Exception:
             pass
