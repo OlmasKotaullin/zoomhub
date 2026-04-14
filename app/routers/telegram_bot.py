@@ -1039,14 +1039,13 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
             )
             return
 
-        # Progress message (will be updated via editMessage)
+        # Progress message — visible immediately
         size_mb = file_size / (1024 * 1024) if file_size else 0
         size_info = f" ({size_mb:.0f} МБ)" if size_mb > 5 else ""
         progress_text = (
-            f"⏳ Обрабатываю запись{size_info}...\n\n"
-            f"— Скачивание\n"
-            f"   Транскрипция\n"
-            f"   Конспект"
+            f"📥 *Запись получена*{size_info}\n\n"
+            f"Скачиваю файл...\n"
+            f"Конспект будет готов через 3-5 мин."
         )
         resp = await _tg_send(chat_id, progress_text)
         progress_msg_id = resp.get("result", {}).get("message_id", 0)
@@ -1114,10 +1113,10 @@ async def _handle_media_inner(chat_id: str, file_id: str, filename: str, file_si
         # Update progress: download done
         if progress_msg_id:
             await _tg_edit(chat_id, progress_msg_id,
-                           "⏳ Обрабатываю запись...\n\n"
-                           "✓ Скачано\n"
-                           "— Транскрипция...\n"
-                           "   Конспект")
+                           "⏳ *Обрабатываю запись...*\n\n"
+                           "✅ Файл скачан\n"
+                           "🔄 Транскрибирую речь...\n"
+                           "⬜ Генерация конспекта")
 
         logger.info(f"Telegram upload: meeting {meeting.id} from user {user.id} ({filename})")
 
@@ -1135,15 +1134,24 @@ async def _run_pipeline_and_notify(chat_id: str, meeting_id: int, progress_msg_i
     """Run pipeline in background, then send result to Telegram."""
     try:
         from app.services.pipeline import process_meeting
-        await process_meeting(meeting_id)
 
-        # Update progress: transcription done, generating summary
-        if progress_msg_id:
-            await _tg_edit(chat_id, progress_msg_id,
-                           "⏳ Обрабатываю запись...\n\n"
-                           "✓ Скачано\n"
-                           "✓ Транскрипт готов\n"
-                           "— Генерирую конспект...")
+        async def _progress(step: str):
+            if not progress_msg_id:
+                return
+            if step == "transcribing":
+                await _tg_edit(chat_id, progress_msg_id,
+                               "⏳ *Обрабатываю запись...*\n\n"
+                               "✅ Файл скачан\n"
+                               "🔄 Транскрибирую речь...\n"
+                               "⬜ Генерация конспекта")
+            elif step == "summarizing":
+                await _tg_edit(chat_id, progress_msg_id,
+                               "⏳ *Почти готово...*\n\n"
+                               "✅ Файл скачан\n"
+                               "✅ Речь распознана\n"
+                               "🔄 Генерирую конспект...")
+
+        await process_meeting(meeting_id, progress_callback=_progress)
 
         # Smart title: replace generic "Запись DD.MM" with first topic or TLDR
         try:

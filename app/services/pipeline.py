@@ -227,8 +227,10 @@ async def _extract_audio(file_path: str) -> str:
     return str(extracted)
 
 
-async def process_meeting(meeting_id: int, download_url: str | None = None, access_token: str | None = None):
-    """Фоновая обработка записи: скачивание → транскрибация → конспект."""
+async def process_meeting(meeting_id: int, download_url: str | None = None, access_token: str | None = None,
+                          progress_callback=None):
+    """Фоновая обработка записи: скачивание → транскрибация → конспект.
+    progress_callback: async func(step: str) — called at each stage for UI updates."""
     try:
         # Шаг 1: Скачивание (если Zoom)
         if download_url:
@@ -263,6 +265,8 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
         # Шаг 2: Транскрипция
         try:
             _update_status(meeting_id, MeetingStatus.transcribing)
+            if progress_callback:
+                await progress_callback("transcribing")
             logger.info(f"[{meeting_id}] Начинаю транскрибацию: {audio_path}")
 
             user_id = _get_user_id(meeting_id)
@@ -296,9 +300,11 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
         except Exception as e:
             logger.warning(f"[{meeting_id}] Ошибка классификации: {e}")
 
-        # Шаг 3: Генерация конспекта через Claude
+        # Шаг 3: Генерация конспекта
         try:
             _update_status(meeting_id, MeetingStatus.summarizing)
+            if progress_callback:
+                await progress_callback("summarizing")
             logger.info(f"[{meeting_id}] Генерирую конспект...")
 
             summary_data = await generate_summary(transcript_text)
