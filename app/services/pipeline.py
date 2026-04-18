@@ -217,7 +217,13 @@ async def _compress_large_audio(file_path: str) -> str:
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,
     )
-    await proc.wait()
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=600)
+    except asyncio.TimeoutError:
+        proc.kill()
+        logger.error(f"ffmpeg compression timeout (600s), using original: {src.name}")
+        compressed.unlink(missing_ok=True)
+        return file_path
 
     if proc.returncode != 0 or not compressed.exists():
         logger.warning(f"Audio compression failed (rc={proc.returncode}), using original")
@@ -256,7 +262,13 @@ async def _extract_audio(file_path: str) -> str:
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,
     )
-    await proc.wait()
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=600)
+    except asyncio.TimeoutError:
+        proc.kill()
+        logger.error(f"ffmpeg extraction timeout (600s), using original: {src.name}")
+        extracted.unlink(missing_ok=True)
+        return file_path
 
     if proc.returncode != 0 or not extracted.exists():
         logger.warning(f"Audio extraction failed (rc={proc.returncode}), using original")
@@ -326,10 +338,15 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
             user_id = _get_user_id(meeting_id)
             result = await transcribe_file(audio_path, user_id=user_id)
 
-            logger.info(f"[{meeting_id}] Транскрипт получен: {len(result['full_text'])} символов")
+            transcript_text = result.get("full_text", "")
+            logger.info(f"[{meeting_id}] Транскрипт получен: {len(transcript_text)} символов")
+
+            if not transcript_text.strip():
+                logger.warning(f"[{meeting_id}] Пустой транскрипт — файл не содержит речи")
+                _update_status(meeting_id, MeetingStatus.error, "Транскрипт пуст — файл не содержит речи")
+                return
 
             # Сохраняем транскрипт — с retry
-            transcript_text = result["full_text"]
             _save_transcript(meeting_id, result["full_text"], result["segments"])
 
             # Вычисляем duration через ffprobe (провайдеры не возвращают его)
@@ -367,6 +384,17 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
 
         except Exception as e:
             logger.warning(f"[{meeting_id}] Ошибка конспекта: {e}. Транскрипт доступен.")
+
+        # Очистка временных файлов (сжатые/извлечённые копии)
+        try:
+            audio_dir = Path(audio_path).parent
+            for pattern in ("*_compressed.opus", "*_audio.opus"):
+                for tmp in audio_dir.glob(pattern):
+                    if str(tmp) != audio_path:
+                        tmp.unlink(missing_ok=True)
+                        logger.info(f"[{meeting_id}] Удалён временный файл: {tmp.name}")
+        except Exception as e:
+            logger.warning(f"[{meeting_id}] Ошибка очистки временных файлов: {e}")
 
         # Готово
         _update_status(meeting_id, MeetingStatus.ready)

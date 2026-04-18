@@ -361,13 +361,17 @@ def _extract_media(message: dict) -> tuple[str | None, str, int]:
         vn = message["video_note"]
         return vn["file_id"], "videonote.mp4", vn.get("file_size", 0)
 
-    # Document (check if audio/video by mime)
+    # Document (check if audio/video by mime or extension)
     if "document" in message:
         d = message["document"]
         mime = d.get("mime_type", "")
-        if mime.startswith("audio/") or mime.startswith("video/"):
-            name = d.get("file_name", "document.mp4")
-            return d["file_id"], name, d.get("file_size", 0)
+        name = d.get("file_name", "")
+        ext = Path(name).suffix.lower() if name else ""
+        is_media = (mime.startswith("audio/") or mime.startswith("video/") or
+                    ext in {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".oga",
+                            ".opus", ".m4b", ".3gp", ".webm", ".mp4", ".mkv", ".mov"})
+        if is_media:
+            return d["file_id"], name or "document.mp4", d.get("file_size", 0)
 
     return None, "", 0
 
@@ -1098,8 +1102,8 @@ async def _handle_media_process(chat_id: str, file_id: str, filename: str, file_
                 ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                  "-of", "default=noprint_wrappers=1:nokey=1", str(file_path)],
                 capture_output=True, text=True, timeout=10)
-            duration = float(probe.stdout.strip()) if probe.returncode == 0 else 0
-            if 0 < duration < 5:
+            duration = float(probe.stdout.strip()) if probe.returncode == 0 and probe.stdout.strip() else 0
+            if duration < 5:
                 meeting.status = MeetingStatus.error
                 meeting.error_message = "Файл слишком короткий"
                 db.commit()

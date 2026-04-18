@@ -75,7 +75,7 @@ R2_BUCKET = os.environ.get("R2_BUCKET", "zoomhub")
 # App URL (for Telegram inline buttons)
 APP_URL = os.environ.get("APP_URL", "https://zoomhub.ru")
 
-ALLOWED_EXTENSIONS = {".mp4", ".mp3", ".wav", ".m4a", ".webm", ".ogg"}
+ALLOWED_EXTENSIONS = {".mp4", ".mp3", ".wav", ".m4a", ".webm", ".ogg", ".oga", ".opus", ".aac", ".flac", ".3gp", ".m4b"}
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
 
 # OAuth

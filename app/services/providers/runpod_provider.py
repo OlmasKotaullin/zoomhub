@@ -127,13 +127,18 @@ class RunPodWhisperProvider(TranscriptionProvider):
         import time
         from app.config import SECRET_KEY, APP_URL
 
+        now = int(time.time())
+
+        # Cleanup expired tokens (older than 1 hour)
+        expired = [k for k, v in _temp_file_tokens.items() if now - v.get("ts", 0) > 3600]
+        for k in expired:
+            del _temp_file_tokens[k]
+
         # Create a temp token: sha256(secret + filepath + timestamp)
-        # Valid for 1 hour
-        ts = str(int(time.time()))
+        ts = str(now)
         token = hashlib.sha256(f"{SECRET_KEY}:{file_path}:{ts}".encode()).hexdigest()[:32]
 
-        # Store token -> filepath mapping in a module-level dict (cleaned up after use)
-        _temp_file_tokens[token] = {"path": file_path, "ts": int(ts)}
+        _temp_file_tokens[token] = {"path": file_path, "ts": now}
 
         url = f"{APP_URL}/api/temp-audio/{token}"
         logger.info(f"Serve URL created: {url}")

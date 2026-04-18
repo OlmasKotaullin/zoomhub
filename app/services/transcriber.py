@@ -39,7 +39,7 @@ async def _transcribe_via_groq(file_path: str) -> dict | None:
 
         logger.info(f"Транскрипция через Groq Whisper: {file_size / 1024 / 1024:.1f} MB")
 
-        async with httpx.AsyncClient(timeout=300) as client:
+        async with httpx.AsyncClient(timeout=600) as client:
             with open(file_path, "rb") as f:
                 resp = await client.post(
                     "https://api.groq.com/openai/v1/audio/transcriptions",
