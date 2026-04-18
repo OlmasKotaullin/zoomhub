@@ -172,21 +172,39 @@ async def _tg_api(method: str, **kwargs):
 
 async def _tg_send(chat_id: str, text: str, parse_mode: str = "Markdown",
                    reply_markup: dict | None = None):
-    """Send message to Telegram chat."""
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
+    """Send message to Telegram chat. Falls back to plain text if Markdown fails."""
+    payload = {"chat_id": chat_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    return await _tg_api("sendMessage", **payload)
+    result = await _tg_api("sendMessage", **payload)
+
+    # Fallback: if Markdown broke (400), retry without parse_mode
+    if parse_mode and result and not result.get("ok"):
+        logger.warning(f"sendMessage failed with parse_mode={parse_mode}, retrying plain text")
+        payload.pop("parse_mode", None)
+        result = await _tg_api("sendMessage", **payload)
+
+    return result
 
 
 async def _tg_edit(chat_id: str, message_id: int, text: str,
                    parse_mode: str = "Markdown", reply_markup: dict | None = None):
-    """Edit existing Telegram message."""
-    payload = {"chat_id": chat_id, "message_id": message_id,
-               "text": text, "parse_mode": parse_mode}
+    """Edit existing Telegram message. Falls back to plain text if Markdown fails."""
+    payload = {"chat_id": chat_id, "message_id": message_id, "text": text}
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    return await _tg_api("editMessageText", **payload)
+    result = await _tg_api("editMessageText", **payload)
+
+    if parse_mode and result and not result.get("ok"):
+        logger.warning(f"editMessageText failed with parse_mode={parse_mode}, retrying plain text")
+        payload.pop("parse_mode", None)
+        result = await _tg_api("editMessageText", **payload)
+
+    return result
 
 
 async def _tg_send_document(chat_id: str, buf: io.BytesIO, filename: str,
@@ -1478,11 +1496,11 @@ async def _handle_voice_question(chat_id: str, file_id: str, file_size: int, mes
 _TG_TEMPLATES = {
     "tasks": {
         "name": "Задачи",
-        "prompt": "Извлеки ВСЕ задачи из встречи. Формат: нумерованный список, одна задача = одна строка. Формат строки: «1. Ответственный — Задача (дедлайн)». Если дедлайн не указан — не пиши. ЗАПРЕЩЕНО: markdown-таблицы (символ |). Только факты из транскрипта.",
+        "prompt": "Извлеки ВСЕ задачи из встречи. Формат: нумерованный список, одна задача = одна строка. Формат строки: «1. Ответственный — Задача (дедлайн)». Если дедлайн не указан — не пиши. ЗАПРЕЩЕНО: markdown-таблицы (символ |), _курсив_, `код`, [ссылки](url). Только факты из транскрипта.",
     },
     "summary": {
         "name": "Резюме",
-        "prompt": "Дай краткое структурированное резюме встречи: ключевые темы, решения, задачи. Списки через •. ЗАПРЕЩЕНО: markdown-таблицы (символ |), заголовки (# ##). Только факты из транскрипта.",
+        "prompt": "Дай краткое структурированное резюме встречи: ключевые темы, решения, задачи. Списки через •. ЗАПРЕЩЕНО: markdown-таблицы (символ |), заголовки (# ##), _курсив_, `код`, [ссылки](url). Только факты из транскрипта.",
     },
 }
 
