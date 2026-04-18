@@ -212,16 +212,27 @@ async def _tg_edit(chat_id: str, message_id: int, text: str,
 
 async def _tg_send_document(chat_id: str, buf: io.BytesIO, filename: str,
                             caption: str = ""):
-    """Send document to Telegram chat."""
+    """Send document to Telegram chat. Falls back to plain text if Markdown caption fails."""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
     data = {"chat_id": chat_id}
     if caption:
         data["caption"] = caption
         data["parse_mode"] = "Markdown"
     async with httpx.AsyncClient(timeout=60) as client:
+        buf.seek(0)
         resp = await client.post(url, data=data,
                                  files={"document": (filename, buf, "text/plain")})
-        return resp.json()
+        result = resp.json()
+
+        if caption and result and not result.get("ok"):
+            logger.warning(f"sendDocument failed with Markdown caption, retrying plain text")
+            data.pop("parse_mode", None)
+            buf.seek(0)
+            resp = await client.post(url, data=data,
+                                     files={"document": (filename, buf, "text/plain")})
+            result = resp.json()
+
+        return result
 
 
 # Callback data pattern: action:meeting_id[:extra]

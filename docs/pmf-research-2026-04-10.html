@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZoomHub PMF Research — 10.04.2026</title>
+<style>
+  :root { --bg: #0f172a; --card: #1e293b; --accent: #f97316; --text: #f1f5f9; --text2: #94a3b8; --green: #22c55e; --red: #ef4444; --blue: #3b82f6; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 8px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--text2); font-size: 1.1rem; margin-bottom: 48px; }
+  h2 { font-size: 1.6rem; font-weight: 700; margin: 48px 0 24px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 1.2rem; font-weight: 600; margin: 32px 0 12px; color: var(--accent); }
+  h4 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; }
+  p { margin-bottom: 16px; color: var(--text2); }
+  strong { color: var(--text); }
+  .card { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  .card-accent { border-left: 4px solid var(--accent); }
+  .card-green { border-left: 4px solid var(--green); }
+  .card-red { border-left: 4px solid var(--red); }
+  .card-blue { border-left: 4px solid var(--blue); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 0.9rem; }
+  th { background: var(--card); color: var(--accent); text-align: left; padding: 12px; font-weight: 600; }
+  td { padding: 10px 12px; border-bottom: 1px solid #334155; color: var(--text2); }
+  tr:hover td { background: rgba(249, 115, 22, 0.05); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-orange { background: rgba(249,115,22,0.15); color: var(--accent); }
+  .badge-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } h1 { font-size: 1.8rem; } }
+  .quote { border-left: 3px solid var(--accent); padding: 16px 20px; margin: 20px 0; background: rgba(249,115,22,0.05); border-radius: 0 8px 8px 0; font-style: italic; }
+  .metric { text-align: center; padding: 20px; }
+  .metric-value { font-size: 2.2rem; font-weight: 800; color: var(--accent); }
+  .metric-label { font-size: 0.85rem; color: var(--text2); margin-top: 4px; }
+  .toc { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 40px; }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin-bottom: 8px; }
+  .pmf-bar { height: 8px; background: #334155; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .pmf-fill { height: 100%; border-radius: 4px; }
+  ul, ol { margin: 12px 0 16px 24px; color: var(--text2); }
+  li { margin-bottom: 6px; }
+  .separator { height: 1px; background: #334155; margin: 48px 0; }
+  .footer { text-align: center; color: var(--text2); font-size: 0.85rem; margin-top: 64px; padding-top: 32px; border-top: 1px solid #334155; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>ZoomHub <span>PMF Research</span></h1>
+<p class="subtitle">Product-Market Fit, сегменты ЦА, отстройка от Буквицы, позиционирование<br>CEO Council Session — 10 апреля 2026</p>
+
+<div class="grid-2" style="margin-bottom: 40px;">
+  <div class="card metric"><div class="metric-value">0</div><div class="metric-label">Внешних пользователей</div></div>
+  <div class="card metric"><div class="metric-value">35K</div><div class="metric-label">Платящих у Буквицы</div></div>
+  <div class="card metric"><div class="metric-value">2.08 &#8381;/ч</div><div class="metric-label">COGS транскрибации</div></div>
+  <div class="card metric"><div class="metric-value">4/10</div><div class="metric-label">PMF-готовность (рынок)</div></div>
+</div>
+
+<div class="toc">
+  <h4 style="margin-top:0">Содержание</h4>
+  <ol>
+    <li><a href="#positioning">Позиционирование: транскрибатор vs новая категория</a></li>
+    <li><a href="#vs">ZoomHub vs Буквица: матрица сравнения</a></li>
+    <li><a href="#segments">7 сегментов ЦА с messaging</a></li>
+    <li><a href="#jtbd">Jobs-to-be-Done по сегментам</a></li>
+    <li><a href="#pmf">PMF-готовность: шкала Sean Ellis</a></li>
+    <li><a href="#interviews">Вопросы для проблемных интервью</a></li>
+    <li><a href="#strategy">Стратегия захвата рынка</a></li>
+    <li><a href="#roadmap">Roadmap: 0 &rarr; 50 &rarr; 500 платящих</a></li>
+  </ol>
+</div>
+
+<!-- ==================== 1. POSITIONING ==================== -->
+<h2 id="positioning">1. Позиционирование</h2>
+
+<div class="quote">
+  Буквица продаёт текст. ZoomHub продаёт память.<br>
+  Буквица превращает аудио в текст. ZoomHub превращает встречи в действия.
+</div>
+
+<div class="grid-2">
+  <div class="card card-red">
+    <h4>&#10060; Проигрышная стратегия</h4>
+    <p><strong>«Убийца Буквицы»</strong> — повторить все фичи (YouTube, 23 языка), перебить 150K юзеров, ценовая война с компанией на 10M&#8381;/мес чистыми.</p>
+  </div>
+  <div class="card card-green">
+    <h4>&#9989; Выигрышная стратегия</h4>
+    <p><strong>«Другая категория»</strong> — не «лучше транскрибирует», а «решает другую проблему». Как Notion vs Google Docs, Slack vs Email.</p>
+  </div>
+</div>
+
+<h3>Название категории</h3>
+<div class="card">
+<table>
+  <tr><th>Вариант</th><th>Русский</th><th>English</th><th>Оценка</th></tr>
+  <tr><td><strong>1</strong></td><td><strong>Рабочая память встреч</strong></td><td>Meeting Memory</td><td><span class="badge badge-green">Лучший</span></td></tr>
+  <tr><td>2</td><td>Управление знаниями встреч</td><td>Meeting Knowledge</td><td><span class="badge badge-orange">B2B</span></td></tr>
+  <tr><td>3</td><td>Интеллект встреч</td><td>Meeting Intelligence</td><td><span class="badge badge-blue">Размытый</span></td></tr>
+  <tr><td>4</td><td>Второй мозг для встреч</td><td>Second Brain</td><td><span class="badge badge-orange">Нишевый</span></td></tr>
+</table>
+</div>
+
+<h3>Category POV — Манифест</h3>
+<div class="card card-accent">
+<p><strong>Ваши встречи — это неиспользованные данные.</strong></p>
+<p>Каждая компания проводит сотни встреч в месяц. Через час после встречи 70% информации забыто. Через неделю — 90%.</p>
+<p>Индустрия транскрибации предложила решение: превратить аудио в текст. Это шаг, но это тупик. 15 страниц неструктурированного потока сознания. Никто не перечитывает транскрипты.</p>
+<p><strong>Проблема не в том, что у вас нет текста встречи. Проблема в том, что у вас нет доступа к знаниям, которые были на встрече.</strong></p>
+<p>ZoomHub — это рабочая память ваших встреч. Вы не ищете «ту запись с прошлого вторника» — вы спрашиваете: «Что мы решили по бюджету Q3?» — и получаете ответ с цитатой и таймкодом. Из всех ваших записей.</p>
+</div>
+
+<!-- ==================== 2. VS ==================== -->
+<h2 id="vs">2. ZoomHub vs Буквица</h2>
+
+<div class="card">
+<table>
+  <tr><th>Фича</th><th>ZoomHub</th><th>Буквица</th><th>Кто выигрывает</th></tr>
+  <tr><td>Таймкоды</td><td>Каждые 1-3 предложения</td><td>Нет (стена текста)</td><td><span class="badge badge-green">ZoomHub</span></td></tr>
+  <tr><td>AI-чат по записи</td><td>Да, с таймкодами</td><td>Нет</td><td><span class="badge badge-green">ZoomHub</span></td></tr>
+  <tr><td>Поиск по базе</td><td>По всем записям</td><td>Нет</td><td><span class="badge badge-green">ZoomHub</span></td></tr>
+  <tr><td>Веб-интерфейс</td><td>Полный дашборд</td><td>Нет</td><td><span class="badge badge-green">ZoomHub</span></td></tr>
+  <tr><td>Zoom-интеграция</td><td>OAuth, автозапись</td><td>Нет</td><td><span class="badge badge-green">ZoomHub</span></td></tr>
+  <tr><td>.txt с таймкодами</td><td>Да</td><td>Без таймкодов</td><td><span class="badge badge-green">ZoomHub</span></td></tr>
+  <tr><td>AI-конспект</td><td>Автоматически</td><td>По кнопке</td><td>Паритет</td></tr>
+  <tr><td>YouTube/Rutube/TG/IG</td><td>Нет</td><td>Да</td><td><span class="badge badge-red">Буквица</span></td></tr>
+  <tr><td>23 языка</td><td>Не заявлено</td><td>Да</td><td><span class="badge badge-red">Буквица</span></td></tr>
+  <tr><td>Размер файлов</td><td>До 2ГБ</td><td>Видео 9ГБ</td><td><span class="badge badge-red">Буквица</span></td></tr>
+  <tr><td>Социальное доказательство</td><td>0 юзеров</td><td>150K + Сбер, Яндекс</td><td><span class="badge badge-red">Буквица</span></td></tr>
+</table>
+</div>
+
+<div class="quote">
+  70-80% пользователей Буквицы используют её для одноразовой транскрипции (подкасты, лекции). Им ZoomHub не нужен.<br>
+  20-30% транскрибируют рабочие встречи — вот наши люди.<br>
+  Но главный рынок — те, кто вообще НЕ использует Буквицу и ведёт заметки в блокноте.
+</div>
+
+<!-- ==================== 3. SEGMENTS ==================== -->
+<h2 id="segments">3. Сегменты ЦА</h2>
+
+<div class="card card-accent">
+  <h4>Сегмент 1: Коучи, консультанты, трекеры <span class="badge badge-green">Beachhead</span></h4>
+  <p><strong>Размер:</strong> ~50-80K активных в РФ | <strong>WTP:</strong> 499-1299&#8381;/мес | <strong>Частота:</strong> 15-25ч/нед</p>
+  <p><strong>Боль:</strong> 15-25 сессий/неделю, забывают контекст клиентов, ручные заметки отнимают 30-40% времени</p>
+  <p><strong>Заголовок:</strong> &laquo;Помните контекст каждого клиента — даже если их 30&raquo;</p>
+  <p><strong>Подзаголовок:</strong> AI-ассистент слушал все ваши сессии и ответит на любой вопрос</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:70%;background:var(--green)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>7/10</strong></p>
+</div>
+
+<div class="card card-blue">
+  <h4>Сегмент 2: Руководители B2B-бизнеса</h4>
+  <p><strong>Размер:</strong> ~50-80K компаний | <strong>WTP:</strong> 3000-5000&#8381;/мес | <strong>Частота:</strong> 10-30ч/мес</p>
+  <p><strong>Боль:</strong> Решения теряются, протоколы не пишутся, «мы же об этом говорили»</p>
+  <p><strong>Заголовок:</strong> &laquo;Ни одно решение с ваших встреч больше не потеряется&raquo;</p>
+  <p><strong>Подзаголовок:</strong> ZoomHub записывает, расшифровывает и запоминает всё, что обсуждалось</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:50%;background:var(--blue)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>5/10</strong></p>
+</div>
+
+<div class="card card-blue">
+  <h4>Сегмент 3: Отделы продаж / РОПы</h4>
+  <p><strong>Размер:</strong> ~30-50K компаний | <strong>WTP:</strong> 5000-15000&#8381;/мес (команда) | <strong>Частота:</strong> 30-100ч/мес</p>
+  <p><strong>Боль:</strong> Менеджер забыл, что обещал. РОП не знает, что на звонках. Нет обучения новичков</p>
+  <p><strong>Заголовок:</strong> &laquo;Слушайте 100% звонков, не тратя ни минуты&raquo;</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:20%;background:var(--red)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>2/10</strong> (нужна diarization, CRM)</p>
+</div>
+
+<div class="card">
+  <h4>Сегмент 4: Продакт-менеджеры, UX-исследователи</h4>
+  <p><strong>Размер:</strong> ~30-50K | <strong>WTP:</strong> 499-1299&#8381;/мес | <strong>Частота:</strong> 5-30ч/мес (волнообразно)</p>
+  <p><strong>Боль:</strong> Обработка 1ч CustDev = 2-3ч. Нет единой базы инсайтов</p>
+  <p><strong>Заголовок:</strong> &laquo;20 CustDev-интервью. 1 вопрос. Все инсайты.&raquo;</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:50%;background:var(--blue)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>5/10</strong></p>
+</div>
+
+<div class="card">
+  <h4>Сегмент 5: Онлайн-школы и EdTech</h4>
+  <p><strong>Размер:</strong> ~15-20K школ | <strong>WTP:</strong> 1299-3990&#8381;/мес | <strong>Частота:</strong> 20-100ч/мес</p>
+  <p><strong>Заголовок:</strong> &laquo;Превратите видеоуроки в текстовую базу знаний с поиском&raquo;</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:40%;background:var(--accent)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>4/10</strong></p>
+</div>
+
+<div class="card">
+  <h4>Сегмент 6: Фрилансеры и эксперты-одиночки</h4>
+  <p><strong>Размер:</strong> ~100-200K | <strong>WTP:</strong> Free или 499&#8381;/мес | <strong>Частота:</strong> 5-15ч/мес</p>
+  <p><strong>Заголовок:</strong> &laquo;Клиент сказал — ZoomHub записал. Навсегда.&raquo;</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:35%;background:var(--accent)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>3.5/10</strong></p>
+</div>
+
+<div class="card card-red">
+  <h4>Сегмент 7: Массовый пользователь (аудитория Буквицы) <span class="badge badge-red">Не наш</span></h4>
+  <p><strong>Размер:</strong> 150K+ | <strong>Боль:</strong> Подкаст/лекция &rarr; текст | <strong>WTP:</strong> 649&#8381;/мес</p>
+  <p>Буквица &mdash; &laquo;good enough&raquo;. Таймкоды и AI-чат для них nice-to-have. Конкурировать по convenience невозможно (YouTube, 23 языка, бренд).</p>
+  <div class="pmf-bar"><div class="pmf-fill" style="width:10%;background:var(--red)"></div></div>
+  <p style="font-size:0.85rem">PMF-готовность: <strong>1/10</strong> — чужой рынок</p>
+</div>
+
+<!-- ==================== 4. JTBD ==================== -->
+<h2 id="jtbd">4. Jobs-to-be-Done</h2>
+
+<div class="card card-accent">
+  <h4>Functional JTBD (консультант/трекер)</h4>
+  <ul>
+    <li>&laquo;Когда я провожу 6-10 созвонов в день, хочу автоматически получать конспект, чтобы не тратить 30+ мин вечером&raquo;</li>
+    <li>&laquo;Когда клиент через 2 месяца спрашивает 'а мы это обсуждали?', хочу за 30 сек найти точный момент&raquo;</li>
+    <li>&laquo;Когда готовлюсь к сессии, хочу быстро вспомнить контекст всех предыдущих встреч с клиентом&raquo;</li>
+  </ul>
+  <h4>Emotional JTBD</h4>
+  <ul>
+    <li>Уверенность, что ничего важного не потеряно</li>
+    <li>Выглядеть профессионально (&laquo;помню все детали&raquo;)</li>
+    <li>Не испытывать тревогу от горы необработанных записей</li>
+  </ul>
+</div>
+
+<!-- ==================== 5. PMF ==================== -->
+<h2 id="pmf">5. PMF-готовность</h2>
+
+<div class="card">
+<p><strong>Шкала Sean Ellis:</strong> &laquo;Как бы вы себя чувствовали, если бы больше не могли пользоваться ZoomHub?&raquo;</p>
+<p>Порог PMF: <strong>40%+ &laquo;very disappointed&raquo;</strong></p>
+
+<table>
+  <tr><th>Сегмент</th><th>Прогноз &laquo;very disappointed&raquo;</th><th>PMF</th></tr>
+  <tr><td>Консультанты 5+ звонков/день</td><td><strong>65-75%</strong></td><td><span class="badge badge-green">Есть</span></td></tr>
+  <tr><td>Маркетологи / продакты (CustDev)</td><td>35-45%</td><td><span class="badge badge-orange">На грани</span></td></tr>
+  <tr><td>Руководители отделов продаж</td><td>15-25%</td><td><span class="badge badge-red">Нет</span></td></tr>
+  <tr><td>Массовый пользователь (Буквица)</td><td>10-20%</td><td><span class="badge badge-red">Нет</span></td></tr>
+</table>
+</div>
+
+<div class="card card-green">
+  <h4>Что нужно для 40%+ &laquo;very disappointed&raquo;</h4>
+  <p><strong>Must-have (без этого не будет PMF):</strong></p>
+  <ol>
+    <li>Автозапись Zoom без участия пользователя <span class="badge badge-green">Есть</span></li>
+    <li>Конспект-first UX (TLDR + задачи + темы) <span class="badge badge-green">Есть</span></li>
+    <li>Поиск по всей базе записей <span class="badge badge-green">Есть</span></li>
+    <li>AI-чат в Telegram (не только на сайте) <span class="badge badge-red">Нет</span></li>
+  </ol>
+  <p><strong>Should-have (усиливает до 50%+):</strong></p>
+  <ol>
+    <li>Diarization (деление на спикеров) <span class="badge badge-red">Нет</span></li>
+    <li>Автоматические follow-up по шаблонам <span class="badge badge-red">Нет</span></li>
+    <li>Еженедельный дайджест <span class="badge badge-red">Нет</span></li>
+  </ol>
+</div>
+
+<!-- ==================== 6. INTERVIEWS ==================== -->
+<h2 id="interviews">6. Вопросы для проблемных интервью</h2>
+<p>По методологии <strong>&laquo;The Mom Test&raquo;</strong> — спрашиваем о прошлом, не о будущем.</p>
+
+<div class="card">
+  <h4>Блок 1: Контекст (5 мин)</h4>
+  <ol>
+    <li>&laquo;Расскажи про свой последний рабочий день — сколько созвонов было?&raquo;</li>
+    <li>&laquo;Что ты делаешь с записью после созвона?&raquo;</li>
+    <li>&laquo;Когда последний раз нужно было вернуться к записи прошлого созвона — зачем?&raquo;</li>
+    <li>&laquo;Как ты это делал? Сколько времени заняло?&raquo;</li>
+  </ol>
+
+  <h4>Блок 2: Конкретные проблемы (10 мин)</h4>
+  <ol start="5">
+    <li>&laquo;Бывало ли, что важная информация из созвона потерялась? Что произошло?&raquo;</li>
+    <li>&laquo;Как ты сейчас фиксируешь договорённости и action items?&raquo;</li>
+    <li>&laquo;Если созвон был 3 месяца назад и нужно вспомнить детали — что делаешь?&raquo;</li>
+    <li>&laquo;Расскажи ситуацию, когда участники по-разному помнили, о чём договорились&raquo;</li>
+  </ol>
+
+  <h4>Блок 3: Стоимость проблемы (5 мин)</h4>
+  <ol start="9">
+    <li>&laquo;Сколько времени в неделю тратишь на обработку записей / follow-up?&raquo;</li>
+    <li>&laquo;Пробовал какие-то инструменты? Что именно и чем закончилось?&raquo;</li>
+    <li>&laquo;Что НЕ нравится в том, чем пользуешься сейчас?&raquo;</li>
+  </ol>
+
+  <h4>Блок 4: Денежный тест (3 мин)</h4>
+  <ol start="12">
+    <li>&laquo;За какой рабочий инструмент ты платишь и не жалеешь?&raquo;</li>
+    <li>&laquo;Если бы такой инструмент стоил 1000 руб/мес — это 'подумаю' или 'не вопрос'?&raquo;</li>
+  </ol>
+
+  <h4>Блок 5: Финальный фильтр (2 мин)</h4>
+  <ol start="14">
+    <li>&laquo;Можно пришлю бета-версию попробовать на своих записях?&raquo;</li>
+    <li>&laquo;Кого ещё из знакомых замучили созвоны? Можешь познакомить?&raquo;</li>
+  </ol>
+</div>
+
+<!-- ==================== 7. STRATEGY ==================== -->
+<h2 id="strategy">7. Стратегия захвата рынка</h2>
+
+<h3>Стратегия троянского коня</h3>
+<div class="grid-2">
+  <div class="card">
+    <h4>Фаза 1: Знакомая дверь (0-3 мес)</h4>
+    <p>Входим как &laquo;транскрибатор с AI-мозгом&raquo;. SEO по запросам &laquo;расшифровка Zoom&raquo;. На лендинге: заголовок про транскрибацию, подзаголовок — &laquo;рабочая память встреч&raquo;.</p>
+  </div>
+  <div class="card">
+    <h4>Фаза 2: Доказательства (3-6 мес)</h4>
+    <p>Собираем истории: &laquo;Клиент X нашёл решение из встречи 3 мес назад через AI-чат&raquo;. Метрика: % юзеров, использующих поиск/чат.</p>
+  </div>
+  <div class="card">
+    <h4>Фаза 3: Объявление (6-12 мес)</h4>
+    <p>Статья-манифест: &laquo;Почему ваша компания теряет 90% знаний&raquo;. Партнёрство с заметными компаниями.</p>
+  </div>
+  <div class="card card-accent">
+    <h4>Ключевой тест</h4>
+    <p>Если 30%+ юзеров используют AI-чат и поиск — у нас реальная категория. Если нет — у нас транскрибатор с бантиками.</p>
+  </div>
+</div>
+
+<h3>Тактики переманивания с Буквицы</h3>
+<div class="card">
+<ol>
+  <li><strong>SEO &laquo;Переезд с Буквицы&raquo;</strong> — сравнительная таблица, акцент на AI-чат, поиск, таймкоды</li>
+  <li><strong>Migration Offer</strong> — &laquo;Покажи подписку Буквицы — получи 1 мес Про бесплатно&raquo; (COGS: 208&#8381; на 100 мигрантов)</li>
+  <li><strong>Контент-атака</strong> — &laquo;Загрузил одну запись в Буквицу и ZoomHub. Вот разница&raquo; (стена текста vs конспект + таймкоды)</li>
+  <li><strong>Эксплуатация отсутствия веба</strong> — &laquo;500 транскриптов в Telegram, которые вы никогда не найдёте. В ZoomHub — база знаний с поиском&raquo;</li>
+</ol>
+</div>
+
+<h3>Growth Loops</h3>
+<div class="grid-2">
+  <div class="card">
+    <h4>Loop 1: Виральный конспект</h4>
+    <p>Юзер получает конспект &rarr; делится с участниками &rarr; те видят &laquo;Создано в ZoomHub&raquo; &rarr; регистрируются</p>
+  </div>
+  <div class="card">
+    <h4>Loop 2: Инвайт-цепочка</h4>
+    <p>Каждый юзер = 2 инвайта. +3 часа бесплатно за каждый использованный инвайт</p>
+  </div>
+  <div class="card">
+    <h4>Loop 3: Контентный SEO</h4>
+    <p>Юзер цитирует AI-ответ в статье &rarr; читатели ищут инструмент &rarr; находят ZoomHub</p>
+  </div>
+  <div class="card">
+    <h4>Loop 4: Командное расширение</h4>
+    <p>1 человек в команде &rarr; коллеги получают конспекты &rarr; руководитель покупает командный тариф</p>
+  </div>
+</div>
+
+<!-- ==================== 8. ROADMAP ==================== -->
+<h2 id="roadmap">8. Roadmap</h2>
+
+<div class="card">
+<table>
+  <tr><th>Период</th><th>Действие</th><th>Цель</th></tr>
+  <tr><td><strong>Неделя 1-2</strong></td><td>Личные сообщения 15-20 людям из сети Алмаза. Лимит 2ч/мес. Onboarding в боте.</td><td>10-15 активных тестеров</td></tr>
+  <tr><td><strong>Неделя 3-4</strong></td><td>Пост в Telegram-канале Алмаза. Статья на VC.ru. AI-чат в Telegram.</td><td>30-40 юзеров</td></tr>
+  <tr><td><strong>Месяц 2</strong></td><td>ЮКасса. Реферальная (+3ч за инвайт). SEO &laquo;Переезд с Буквицы&raquo;.</td><td>50-80 юзеров, 10-20 платящих</td></tr>
+  <tr><td><strong>Месяц 3-4</strong></td><td>Migration Offer. Telegram Ads в профильных каналах. Командный тариф.</td><td>100-200 юзеров, 30-50 платящих</td></tr>
+  <tr><td><strong>Месяц 5-8</strong></td><td>SEO-автопилот. Партнёрства с GetCourse/инфлюенсерами. YouTube-ссылки.</td><td>500-1000 юзеров, 100-200 платящих</td></tr>
+  <tr><td><strong>Месяц 9-12</strong></td><td>Объявление категории &laquo;Meeting Memory&raquo;. B2B-продажи. CRM-интеграции.</td><td>2000+ юзеров, 300-500 платящих</td></tr>
+</table>
+</div>
+
+<div class="card card-green">
+  <h4>Метрики успеха на этапе 10 юзеров</h4>
+  <table>
+    <tr><th>Метрика</th><th>Цель</th></tr>
+    <tr><td>Обработано записей за неделю</td><td>&gt;30</td></tr>
+    <tr><td>Вернулись 2+ раза</td><td>&gt;50% тестеров</td></tr>
+    <tr><td>&laquo;Это экономит время&raquo;</td><td>3 из 10 сказали</td></tr>
+    <tr><td>Скинул другу без просьбы</td><td>Хотя бы 1</td></tr>
+    <tr><td>Использовал AI-чат/поиск</td><td>&gt;30% (тест категории)</td></tr>
+  </table>
+</div>
+
+<div class="separator"></div>
+
+<div class="card card-accent" style="text-align:center">
+  <p style="font-size:1.3rem;font-weight:700;color:var(--text);margin-bottom:8px">&laquo;Буквица продаёт текст. ZoomHub продаёт память.&raquo;</p>
+  <p>Не конкурируйте по цене транскрибации. Конкурируйте по ценности: у них текст, у нас — ответы.</p>
+</div>
+
+<div class="footer">
+  <p>ZoomHub PMF Research &mdash; CEO Council Session<br>
+  Product Researcher &bull; Market Strategist &bull; Growth Marketer &bull; Category Designer<br>
+  10 апреля 2026</p>
+</div>
+
+</div>
+</body>
+</html>

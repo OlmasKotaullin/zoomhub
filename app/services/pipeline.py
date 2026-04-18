@@ -432,7 +432,7 @@ async def _notify_admins_pipeline_error(meeting_id: int, error: str):
             user_info = f"{user.name} ({user.email})" if user else "unknown"
 
             text = (
-                f"⚠️ *Ошибка обработки*\n\n"
+                f"⚠️ Ошибка обработки\n\n"
                 f"Встреча: {title}\n"
                 f"Юзер: {user_info}\n"
                 f"Ошибка: {error[:300]}"
@@ -445,7 +445,6 @@ async def _notify_admins_pipeline_error(meeting_id: int, error: str):
                         await client.post(url, json={
                             "chat_id": admin.telegram_chat_id,
                             "text": text,
-                            "parse_mode": "Markdown",
                         })
         finally:
             db.close()

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Совет экспертов: AI-чат в Telegram — ZoomHub</title>
+<style>
+  :root {
+    --bg: #0f1117; --bg2: #161922; --bg3: #1c1f2e;
+    --text: #e4e4e7; --text2: #9ca3af; --text3: #6b7280;
+    --accent: #3b82f6; --accent2: #60a5fa;
+    --green: #22c55e; --red: #ef4444; --orange: #f97316; --yellow: #eab308;
+    --border: #2d3040;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 48px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
+  .header h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+  .header .subtitle { color: var(--text2); font-size: 16px; }
+  .header .date { color: var(--text3); font-size: 13px; margin-top: 8px; }
+
+  /* Verdict block */
+  .verdict { background: linear-gradient(135deg, #1e3a5f 0%, #1a1a2e 100%); border: 1px solid var(--accent); border-radius: 16px; padding: 32px; margin-bottom: 40px; }
+  .verdict h2 { color: var(--accent2); font-size: 20px; margin-bottom: 16px; }
+  .verdict-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .verdict-item { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 16px; }
+  .verdict-item .label { color: var(--text3); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .verdict-item .value { font-size: 18px; font-weight: 700; }
+  .verdict-item .value.red { color: var(--red); }
+  .verdict-item .value.green { color: var(--green); }
+  .verdict-item .value.orange { color: var(--orange); }
+  .verdict-item .value.blue { color: var(--accent2); }
+
+  /* Expert cards */
+  .expert { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 24px; overflow: hidden; }
+  .expert-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .expert-avatar { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .expert-avatar.cpo { background: #3b82f620; }
+  .expert-avatar.cto { background: #22c55e20; }
+  .expert-avatar.growth { background: #f9731620; }
+  .expert-avatar.ux { background: #a855f720; }
+  .expert-name { font-weight: 700; font-size: 16px; }
+  .expert-role { color: var(--text2); font-size: 13px; }
+  .expert-body { padding: 24px; }
+
+  /* Findings */
+  .finding { margin-bottom: 20px; }
+  .finding h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--accent2); }
+  .finding p, .finding li { color: var(--text2); font-size: 14px; line-height: 1.7; }
+  .finding ul { padding-left: 20px; }
+  .finding li { margin-bottom: 4px; }
+
+  /* Consensus & Disagreements */
+  .section { margin-bottom: 40px; }
+  .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+
+  .consensus-item { background: var(--bg2); border-left: 3px solid var(--green); border-radius: 0 12px 12px 0; padding: 16px 20px; margin-bottom: 12px; }
+  .consensus-item .title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .consensus-item .detail { color: var(--text2); font-size: 14px; }
+  .consensus-item .votes { color: var(--text3); font-size: 12px; margin-top: 6px; }
+
+  .disagree-item { background: var(--bg2); border-left: 3px solid var(--orange); border-radius: 0 12px 12px 0; padding: 16px 20px; margin-bottom: 12px; }
+  .disagree-item .title { font-weight: 700; font-size: 15px; color: var(--orange); margin-bottom: 8px; }
+  .disagree-table { width: 100%; font-size: 13px; }
+  .disagree-table th { text-align: left; color: var(--text3); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .disagree-table td { padding: 8px; color: var(--text2); border-bottom: 1px solid rgba(255,255,255,0.03); }
+
+  /* Action plan */
+  .action { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; display: grid; grid-template-columns: 40px 1fr 100px 100px; align-items: center; gap: 12px; }
+  .action-num { font-size: 20px; font-weight: 800; color: var(--accent2); text-align: center; }
+  .action-title { font-weight: 600; font-size: 14px; }
+  .action-desc { color: var(--text2); font-size: 13px; margin-top: 2px; }
+  .action-time { color: var(--text3); font-size: 13px; text-align: center; }
+  .action-impact { font-size: 13px; text-align: center; font-weight: 600; }
+  .impact-high { color: var(--red); }
+  .impact-med { color: var(--orange); }
+  .impact-low { color: var(--yellow); }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .tag-p0 { background: #ef444420; color: var(--red); }
+  .tag-p1 { background: #f9731620; color: var(--orange); }
+  .tag-p2 { background: #eab30820; color: var(--yellow); }
+
+  /* Root cause */
+  .root-cause { background: linear-gradient(135deg, #3f1515 0%, #1a1a2e 100%); border: 1px solid var(--red); border-radius: 16px; padding: 28px; margin-bottom: 40px; }
+  .root-cause h2 { color: var(--red); font-size: 20px; margin-bottom: 16px; }
+  .root-cause .chain { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .root-cause .chain-item { background: rgba(255,255,255,0.06); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .root-cause .chain-arrow { color: var(--red); font-size: 18px; }
+  .root-cause p { color: var(--text2); font-size: 14px; }
+
+  /* Economics */
+  .econ-table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 16px 0; }
+  .econ-table th { text-align: left; color: var(--text3); padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .econ-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text2); }
+  .econ-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  @media (max-width: 768px) {
+    .verdict-grid { grid-template-columns: 1fr; }
+    .action { grid-template-columns: 32px 1fr; }
+    .action-time, .action-impact { display: none; }
+    .root-cause .chain { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>Совет экспертов: AI-чат в Telegram</h1>
+    <div class="subtitle">CPO + CTO + Head of Growth + UX-исследователь — единый вердикт</div>
+    <div class="date">11 апреля 2026 · ZoomHub</div>
+  </div>
+
+  <!-- Root Cause -->
+  <div class="root-cause">
+    <h2>Корневая причина: «бот отвечает примитивно и глупо»</h2>
+    <div class="chain">
+      <div class="chain-item">GigaChat (слабейшая модель)</div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-item">12K контекст (50% обрезано)</div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-item">Нет fallback-цепочки</div>
+      <div class="chain-arrow">→</div>
+      <div class="chain-item">Промпт не для Telegram</div>
+      <div class="chain-arrow">=</div>
+      <div class="chain-item" style="border: 1px solid var(--red);">Глупые ответы</div>
+    </div>
+    <p>Все 4 эксперта сошлись: <strong>GigaChat стоит первым в auto-routing для чата, хотя для суммаризации он ПОСЛЕДНИЙ</strong>.
+    Конспект генерирует Gemini (отлично), а вопросы по нему отвечает GigaChat (примитивно). Аналогия CTO: «двигатель от Оки в корпусе BMW».
+    Исправление: сменить приоритет в <code>chat_engine.py</code> — Gemini первым. Стоимость: 0 руб, 1 час работы.</p>
+  </div>
+
+  <!-- Verdict -->
+  <div class="verdict">
+    <h2>Единый вердикт</h2>
+    <div class="verdict-grid">
+      <div class="verdict-item">
+        <div class="label">Главная проблема</div>
+        <div class="value red">GigaChat как дефолт для чата</div>
+      </div>
+      <div class="verdict-item">
+        <div class="label">Решение #1</div>
+        <div class="value green">Gemini → Groq → Claude (fallback)</div>
+      </div>
+      <div class="verdict-item">
+        <div class="label">Стоимость исправления</div>
+        <div class="value blue">1 час, 0 руб</div>
+      </div>
+      <div class="verdict-item">
+        <div class="label">Ожидаемый эффект</div>
+        <div class="value green">Качество ответов x3-5</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Consensus -->
+  <div class="section">
+    <h2>Консенсус (все 4 эксперта согласны)</h2>
+
+    <div class="consensus-item">
+      <div class="title">1. Сменить LLM-провайдер чата на Gemini 2.5 Flash</div>
+      <div class="detail">GigaChat (12K контекст, слабейшая модель) → Gemini (900K контекст, бесплатно, 1500 RPD). Тот же провайдер что для суммаризации — проверено качество. Fallback: Groq → Claude → GigaChat.</div>
+      <div class="votes">CPO ✓ CTO ✓ Growth ✓ UX ✓</div>
+    </div>
+
+    <div class="consensus-item">
+      <div class="title">2. Добавить fallback-цепочку в chat_engine.py</div>
+      <div class="detail">Сейчас один провайдер, при ошибке → «Ошибка AI». В summarizer.py уже есть fallback chain — скопировать подход. Gemini → Groq → Claude → GigaChat.</div>
+      <div class="votes">CPO ✓ CTO ✓ Growth ✓ UX ✓</div>
+    </div>
+
+    <div class="consensus-item">
+      <div class="title">3. Шаблоны-кнопки вместо текстовых примеров</div>
+      <div class="detail">При входе в AI-чат: inline-кнопки [📋 Протокол] [✅ Задачи] [📝 Резюме]. Один тап → готовый ответ. Снижает трение до нуля. Шаблоны уже есть на сайте — перенести в Telegram.</div>
+      <div class="votes">CPO ✓ CTO ✓ Growth ✓ UX ✓</div>
+    </div>
+
+    <div class="consensus-item">
+      <div class="title">4. Качество важнее количества фич</div>
+      <div class="detail">AI-чат — единственный дифференциатор от Буквицы. Если ответы «глупые» — вся стратегия рушится. Сначала сделать 3 шаблона wow-качества, потом расширять.</div>
+      <div class="votes">CPO ✓ CTO ✓ Growth ✓ UX ✓</div>
+    </div>
+
+    <div class="consensus-item">
+      <div class="title">5. Сохранить chat_state в БД</div>
+      <div class="detail">In-memory dict теряется при рестарте Fly.io. Юзер пишет вопрос → получает «отправьте аудио». Решение: поле current_chat_meeting_id в таблице User. 30 мин работы.</div>
+      <div class="votes">CPO ✓ CTO ✓ UX ✓</div>
+    </div>
+
+    <div class="consensus-item">
+      <div class="title">6. Отдельный system prompt для Telegram</div>
+      <div class="detail">Текущий промпт использует ### заголовки и - [ ] чеклисты — Telegram их не рендерит. Нужен Telegram-специфичный prompt: *жирный*, списки через •, ✅ для задач, лимит 2000 символов.</div>
+      <div class="votes">CPO ✓ CTO ✓ UX ✓</div>
+    </div>
+  </div>
+
+  <!-- Disagreements -->
+  <div class="section">
+    <h2>Расхождения</h2>
+
+    <div class="disagree-item">
+      <div class="title">Монетизация AI-чата: бесплатный или за paywall?</div>
+      <table class="disagree-table">
+        <tr><th>Эксперт</th><th>Позиция</th><th>Аргумент</th></tr>
+        <tr><td>CPO</td><td>Бесплатно для всех, качество одинаковое</td><td>Первое впечатление формируется за 1-2 вопроса. Плохой ответ на free → юзер больше не нажмёт</td></tr>
+        <tr><td>Growth</td><td>Качество как paywall: GigaChat free / Gemini paid / Claude pro</td><td>Демонстрация wow-ответа конвертирует лучше скидки. Free видит «базовый» ответ + upsell</td></tr>
+        <tr><td>CTO</td><td>Gemini для всех (бесплатно для компании)</td><td>Free tier Gemini 1500 RPD — хватит на 100+ юзеров. Разницу в качестве юзер не заметит</td></tr>
+      </table>
+    </div>
+
+    <div class="disagree-item">
+      <div class="title">Архитектура: «режим чата» или reply-based?</div>
+      <table class="disagree-table">
+        <tr><th>Эксперт</th><th>Позиция</th><th>Аргумент</th></tr>
+        <tr><td>UX</td><td>В перспективе — reply-based (без режима)</td><td>Снимает все проблемы: state loss, voice/file путаницу, /exit. Как ChatGPT-бот — каждое сообщение самостоятельное</td></tr>
+        <tr><td>CPO</td><td>Оставить режим, но улучшить UX</td><td>Reply-based — серьёзная переработка. Сейчас приоритет — качество LLM, не архитектура</td></tr>
+        <tr><td>CTO</td><td>Режим ок для MVP, reply-based позже</td><td>In-memory state → БД = 30 мин. Полная переделка = 6-8 часов. ROI не оправдан сейчас</td></tr>
+      </table>
+    </div>
+
+    <div class="disagree-item">
+      <div class="title">Markdown vs HTML в Telegram</div>
+      <table class="disagree-table">
+        <tr><th>Эксперт</th><th>Позиция</th><th>Аргумент</th></tr>
+        <tr><td>UX</td><td>Перейти на HTML (P0, 2-3 часа)</td><td>Markdown v1 ломается на спецсимволах в транскрипте. HTML стабильнее</td></tr>
+        <tr><td>CTO</td><td>Оставить Markdown, улучшить prompt</td><td>Если промпт не генерирует сложный markdown — не ломается. Проще ограничить prompt</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Expert details -->
+  <div class="section">
+    <h2>Детали по экспертам</h2>
+
+    <!-- CPO -->
+    <div class="expert">
+      <div class="expert-header">
+        <div class="expert-avatar cpo">🎯</div>
+        <div><div class="expert-name">CPO (Продуктолог)</div><div class="expert-role">User flow, позиционирование, приоритизация</div></div>
+      </div>
+      <div class="expert-body">
+        <div class="finding">
+          <h3>Позиционирование AI-чата</h3>
+          <p>Не «AI-чат», а <strong>«Задать вопрос по встрече»</strong>. Кнопку переименовать с «AI-чат» на «Спросить по записи». Юзер думает действиями, не метафорами.</p>
+        </div>
+        <div class="finding">
+          <h3>Критические фичи для 70% «только-бот» юзеров</h3>
+          <ul>
+            <li><strong>/meetings</strong> — список последних записей (нельзя вернуться к старой)</li>
+            <li><strong>/plan</strong> — остаток лимита (узнаёт только при отказе)</li>
+            <li><strong>Шаблоны-кнопки</strong> — один тап вместо набора текста</li>
+            <li><strong>/chat</strong> — быстрый вход в чат по последней записи</li>
+          </ul>
+        </div>
+        <div class="finding">
+          <h3>Диагностика «глупости»: 60% модель, 25% промпт, 15% контекст</h3>
+          <p>GigaChat (не Pro, не Max) — слабейшая версия. Контекст 12K — обрезка 50%+. Промпт не различает типы вопросов. Для суммаризации Gemini — для чата GigaChat. Несогласованность.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTO -->
+    <div class="expert">
+      <div class="expert-header">
+        <div class="expert-avatar cto">⚙️</div>
+        <div><div class="expert-name">CTO (Техдиректор)</div><div class="expert-role">LLM-стек, архитектура, стоимость</div></div>
+      </div>
+      <div class="expert-body">
+        <div class="finding">
+          <h3>Оптимальная fallback-цепочка</h3>
+          <p>Gemini 2.5 Flash (900K, бесплатно) → Groq Llama 3.3 70B (128K, бесплатно, &lt;1с) → Claude Sonnet 4 (200K, $3/1M) → GigaChat (12K, fallback)</p>
+        </div>
+        <div class="finding">
+          <h3>Математика контекста</h3>
+          <p>Средний транскрипт 40K символов ≈ 10K токенов + system prompt + история = 13K. GigaChat (12K лимит) — <strong>единственный</strong> провайдер, который физически не может обработать стандартный транскрипт. Обрезка отрезает конец — где решения и задачи.</p>
+        </div>
+        <div class="finding">
+          <h3>Конкретные файлы для изменения</h3>
+          <ul>
+            <li><code>registry.py</code> — новая функция <code>get_chat_provider()</code></li>
+            <li><code>chat_engine.py</code> — fallback-цепочка + Telegram prompt + убрать жёсткую обрезку</li>
+            <li><code>telegram_bot.py</code> — передавать <code>is_telegram=True</code></li>
+          </ul>
+        </div>
+        <div class="finding">
+          <h3>Стоимость при масштабе</h3>
+          <table class="econ-table">
+            <tr><th>Масштаб</th><th>Провайдер</th><th>Стоимость/мес</th></tr>
+            <tr><td>0-100 юзеров</td><td>Gemini free tier (1500 RPD)</td><td>0 руб</td></tr>
+            <tr><td>100-500 юзеров</td><td>Gemini платный</td><td>~1800 руб/мес</td></tr>
+            <tr><td>500+ юзеров</td><td>Gemini + Groq</td><td>~5000 руб/мес</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Growth -->
+    <div class="expert">
+      <div class="expert-header">
+        <div class="expert-avatar growth">📈</div>
+        <div><div class="expert-name">Head of Growth</div><div class="expert-role">Монетизация, отстройка от Буквицы, виральность</div></div>
+      </div>
+      <div class="expert-body">
+        <div class="finding">
+          <h3>Контринтуитивный вывод: AI-чат сейчас — unfulfilled promise</h3>
+          <p>Технически реализован. Но при «глупых» ответах — это не killer feature, а точка разочарования. B2B-руководители не будут задавать свободные вопросы. Они будут нажимать шаблоны: «Задачи», «Протокол», «Follow Up». Фокус на 3 шаблона wow-качества.</p>
+        </div>
+        <div class="finding">
+          <h3>Отстройка от Буквицы</h3>
+          <p>Не «ZoomHub = Буквица + AI-мозг» (делает Буквицу якорем). А <strong>«ZoomHub = автопилот для рабочих встреч»</strong>. Буквица → «не потерять слова». ZoomHub → «не потерять решения».</p>
+        </div>
+        <div class="finding">
+          <h3>Виральная петля: публичные протоколы</h3>
+          <p>Юзер нажимает «Протокол» → получает красивую веб-страницу <code>zoomhub.ru/p/abc123</code> → отправляет в рабочий чат. 3-5 участников видят бренд → 0.5-1 регистрация. При 10 протоколах/день = 5-10 органических регистраций.</p>
+        </div>
+        <div class="finding">
+          <h3>Retention: кросс-встречная память</h3>
+          <p>Самый мощный механизм. «За последний месяц у вас 3 встречи про поставщика — вот эволюция обсуждения». Чем больше встреч → тем умнее AI → тем сложнее уйти. Retention +20% на 6-м месяце.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- UX -->
+    <div class="expert">
+      <div class="expert-header">
+        <div class="expert-avatar ux">🔬</div>
+        <div><div class="expert-name">UX-исследователь</div><div class="expert-role">Cognitive load, confusion points, Telegram patterns</div></div>
+      </div>
+      <div class="expert-body">
+        <div class="finding">
+          <h3>Когнитивная нагрузка: 5 ментальных моделей (норма 2-3)</h3>
+          <p>Юзер должен держать в голове: «я в чате или нет?», «голосовое vs файл», «state потерян?», «как выйти?», «почему обрезано?». Для ЦА (нетехнари 35-50 лет) — перегруз.</p>
+        </div>
+        <div class="finding">
+          <h3>Главная UX-ловушка: случайный выход из чата</h3>
+          <p>Аудиофайл (через скрепку) в chat mode → автоматический выход + новая транскрипция. Без предупреждения. Рекомендация: защитный перехват с вопросом «Что сделать? [Новая транскрипция] [Остаться в чате]».</p>
+        </div>
+        <div class="finding">
+          <h3>Reply keyboard как индикатор режима</h3>
+          <p>В Telegram нет строки состояния. Reply keyboard (кнопки вместо клавиатуры) — визуальный индикатор: [📋 Протокол] [✅ Задачи] [📝 Резюме] [❌ Выйти]. Юзер видит кнопки = понимает, что «в чате».</p>
+        </div>
+        <div class="finding">
+          <h3>12 рекомендаций, приоритизированы P0-P3</h3>
+          <ul>
+            <li><span class="tag tag-p0">P0</span> State в БД, защитный перехват файла, HTML вместо Markdown</li>
+            <li><span class="tag tag-p1">P1</span> Шаблоны-кнопки, короткий onboarding, нумерация чанков, typing loop</li>
+            <li><span class="tag tag-p2">P2</span> Reply keyboard, предупреждение об обрезке, контекстные примеры, /meetings</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Plan -->
+  <div class="section">
+    <h2>План действий (единый)</h2>
+
+    <div style="margin-bottom: 16px; color: var(--text2); font-size: 14px;">
+      Объединённый приоритизированный список на основе вердиктов всех 4 экспертов.
+    </div>
+
+    <div class="action">
+      <div class="action-num">1</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p0">P0</span> Сменить LLM чата: Gemini + fallback-цепочка</div>
+        <div class="action-desc">registry.py → get_chat_provider(). chat_engine.py → fallback chain. Gemini → Groq → Claude → GigaChat.</div>
+      </div>
+      <div class="action-time">1 час</div>
+      <div class="action-impact impact-high">Качество x5</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">2</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p0">P0</span> Telegram-специфичный system prompt</div>
+        <div class="action-desc">TELEGRAM_MEETING_SYSTEM: без ###, без - [ ], лимит 2000 симв. is_telegram=True в telegram_bot.py.</div>
+      </div>
+      <div class="action-time">30 мин</div>
+      <div class="action-impact impact-high">Формат x3</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">3</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p0">P0</span> Chat state в БД</div>
+        <div class="action-desc">current_chat_meeting_id в таблице User. Устраняет потерю чата при рестарте/деплое.</div>
+      </div>
+      <div class="action-time">1 час</div>
+      <div class="action-impact impact-high">Надёжность</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">4</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p0">P0</span> Защитный перехват файла в chat mode</div>
+        <div class="action-desc">Вместо автовыхода — спросить: [Новая транскрипция] [Остаться в чате]. Устраняет главную UX-ловушку.</div>
+      </div>
+      <div class="action-time">1 час</div>
+      <div class="action-impact impact-high">UX safety</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">5</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p1">P1</span> Шаблоны-кнопки в AI-чате</div>
+        <div class="action-desc">Inline-кнопки [📋 Протокол] [✅ Задачи] [📝 Резюме] при входе в чат. Callback → предзаполненный промпт.</div>
+      </div>
+      <div class="action-time">3 часа</div>
+      <div class="action-impact impact-med">Вовлечение x2</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">6</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p1">P1</span> Typing action loop + нумерация чанков</div>
+        <div class="action-desc">sendChatAction каждые 4 сек пока AI думает. Номера чанков (1/3) в длинных ответах.</div>
+      </div>
+      <div class="action-time">1 час</div>
+      <div class="action-impact impact-med">UX polish</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">7</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p1">P1</span> /meetings — список записей + /plan — остаток</div>
+        <div class="action-desc">70% юзеров только в боте. Нет способа вернуться к старой записи или узнать лимит.</div>
+      </div>
+      <div class="action-time">3 часа</div>
+      <div class="action-impact impact-med">Навигация</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">8</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p2">P2</span> Публичные протоколы (виральная петля)</div>
+        <div class="action-desc">zoomhub.ru/p/{token} — красивая страница протокола. Шаринг в рабочие чаты. Органический рост.</div>
+      </div>
+      <div class="action-time">1 день</div>
+      <div class="action-impact impact-med">Growth loop</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">9</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p2">P2</span> Reply keyboard как индикатор режима</div>
+        <div class="action-desc">Кнопки вместо клавиатуры в chat mode. Визуальный сигнал «я в чате». ReplyKeyboardRemove при выходе.</div>
+      </div>
+      <div class="action-time">2 часа</div>
+      <div class="action-impact impact-low">UX clarity</div>
+    </div>
+
+    <div class="action">
+      <div class="action-num">10</div>
+      <div>
+        <div class="action-title"><span class="tag tag-p2">P2</span> Кросс-встречная память</div>
+        <div class="action-desc">«За месяц 3 встречи про поставщика — вот эволюция». Accumulated value. Retention +20%.</div>
+      </div>
+      <div class="action-time">1-2 нед</div>
+      <div class="action-impact impact-high">Retention</div>
+    </div>
+  </div>
+
+  <!-- Summary table -->
+  <div class="section">
+    <h2>Экономика AI-чата</h2>
+    <table class="econ-table">
+      <tr>
+        <th>Провайдер</th>
+        <th>Контекст</th>
+        <th>Русский</th>
+        <th>Стоимость/вопрос</th>
+        <th>Free tier</th>
+        <th>Рекомендация</th>
+      </tr>
+      <tr>
+        <td><strong>Gemini 2.5 Flash</strong></td>
+        <td>900K токенов</td>
+        <td>8/10</td>
+        <td>0 руб</td>
+        <td>1500 RPD</td>
+        <td style="color: var(--green); font-weight: 700;">ОСНОВНОЙ</td>
+      </tr>
+      <tr>
+        <td><strong>Groq Llama 3.3</strong></td>
+        <td>128K токенов</td>
+        <td>7/10</td>
+        <td>0 руб</td>
+        <td>~1000 RPD</td>
+        <td style="color: var(--accent2);">Резервный #1</td>
+      </tr>
+      <tr>
+        <td><strong>Claude Sonnet 4</strong></td>
+        <td>200K токенов</td>
+        <td>9/10</td>
+        <td>~3 руб</td>
+        <td>Платный</td>
+        <td style="color: var(--accent2);">Резервный #2</td>
+      </tr>
+      <tr>
+        <td style="color: var(--text3);">GigaChat</td>
+        <td style="color: var(--red);">12K токенов</td>
+        <td>9/10</td>
+        <td>0 руб</td>
+        <td>1000 RPM</td>
+        <td style="color: var(--red);">Последний fallback</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align: center; padding: 32px 0; border-top: 1px solid var(--border); color: var(--text3); font-size: 13px;">
+    Совет из 4 экспертов · 11 апреля 2026 · ZoomHub<br>
+    <span style="color: var(--text3);">Итого P0: 3.5 часа работы → качество ответов x5, устранение 3 критических UX-багов</span>
+  </div>
+
+</div>
+</body>
+</html>
