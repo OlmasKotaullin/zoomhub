@@ -179,6 +179,55 @@ def _is_video_file(file_path: str) -> bool:
     return Path(file_path).suffix.lower() in video_exts
 
 
+AUDIO_COMPRESS_THRESHOLD = 25 * 1024 * 1024  # 25 MB — compress large audio files
+
+
+async def _compress_large_audio(file_path: str) -> str:
+    """Compress large audio files (m4a, wav, etc.) to opus for faster transcription.
+
+    41 MB m4a (1h call) compresses to ~11 MB opus.
+    Only compresses files above 25 MB threshold.
+    If compression fails, returns original file.
+    """
+    src = Path(file_path)
+    if _is_video_file(file_path):
+        return file_path  # video files handled by _extract_audio
+
+    if src.suffix.lower() == ".opus":
+        return file_path  # already compressed
+
+    file_size = src.stat().st_size
+    if file_size < AUDIO_COMPRESS_THRESHOLD:
+        return file_path
+
+    compressed = src.parent / f"{src.stem}_compressed.opus"
+    if compressed.exists():
+        return str(compressed)
+
+    src_size_mb = file_size / 1024 / 1024
+    logger.info(f"Compressing large audio {src.name} ({src_size_mb:.1f} MB)...")
+
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-i", file_path,
+        "-ac", "1",         # mono
+        "-ar", "16000",     # 16 kHz
+        "-c:a", "libopus",  # opus codec
+        "-b:a", "24k",      # 24 kbps
+        "-y", str(compressed),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+
+    if proc.returncode != 0 or not compressed.exists():
+        logger.warning(f"Audio compression failed (rc={proc.returncode}), using original")
+        return file_path
+
+    new_size_mb = compressed.stat().st_size / 1024 / 1024
+    logger.info(f"Audio compressed: {src_size_mb:.1f} MB -> {new_size_mb:.1f} MB")
+    return str(compressed)
+
+
 async def _extract_audio(file_path: str) -> str:
     """Extract audio from video file via ffmpeg. Returns path to audio file.
 
@@ -259,7 +308,12 @@ async def process_meeting(meeting_id: int, download_url: str | None = None, acce
         if _is_video_file(audio_path):
             logger.info(f"[{meeting_id}] Видеофайл — извлекаю аудио...")
             audio_path = await _extract_audio(audio_path)
-            # Update path in DB to use extracted audio
+            _update_audio_path(meeting_id, audio_path)
+
+        # Шаг 1.6: Сжатие больших аудиофайлов (41 MB m4a -> 11 MB opus)
+        new_path = await _compress_large_audio(audio_path)
+        if new_path != audio_path:
+            audio_path = new_path
             _update_audio_path(meeting_id, audio_path)
 
         # Шаг 2: Транскрипция

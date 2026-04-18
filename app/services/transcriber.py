@@ -79,27 +79,40 @@ async def _transcribe_via_groq(file_path: str) -> dict | None:
 
 
 async def transcribe_file(file_path: str, user_id: int | None = None) -> dict:
-    """Транскрибирует файл: RunPod (наш сервер, primary) → Groq (fallback).
+    """Транскрибирует файл: Groq (быстрый, ≤25 MB) → RunPod (GPU, любой размер).
+
+    Pipeline сжимает аудио до ~11 MB перед вызовом, поэтому Groq подходит
+    для большинства файлов. RunPod — fallback для файлов >25 MB или при ошибках Groq.
 
     user_id: если передан, провайдер использует личную Telegram-сессию пользователя.
 
     Returns:
         {"full_text": str, "segments": list[dict]}
     """
-    # Primary: configured provider (RunPod — наш оплаченный сервер)
+    file_size = Path(file_path).stat().st_size
+
+    # Primary: Groq Whisper — мгновенный, нет cold start (если файл ≤25 MB)
+    if file_size <= GROQ_MAX_FILE_SIZE:
+        result = await _transcribe_via_groq(file_path)
+        if result and result.get("full_text"):
+            return result
+        logger.warning("Groq не справился, пробую RunPod...")
+
+    # Fallback: RunPod — наш GPU сервер (любой размер, но cold start 1-5 мин)
     provider = get_transcription_provider()
     try:
         logger.info(f"Транскрипция через {provider.name}: {file_path}")
         result = await provider.transcribe(file_path, user_id=user_id)
         if result and result.get("full_text"):
             return result
-        logger.warning(f"{provider.name} вернул пустой результат, пробую Groq...")
+        logger.warning(f"{provider.name} вернул пустой результат")
     except Exception as e:
-        logger.warning(f"{provider.name} ошибка: {e}, пробую Groq...")
+        logger.warning(f"{provider.name} ошибка: {e}")
 
-    # Fallback: Groq Whisper API (бесплатный, быстрый, ≤25 MB)
-    result = await _transcribe_via_groq(file_path)
-    if result and result.get("full_text"):
-        return result
+    # Последняя попытка: Groq (если ещё не пробовали — файл был >25 MB)
+    if file_size > GROQ_MAX_FILE_SIZE:
+        result = await _transcribe_via_groq(file_path)
+        if result and result.get("full_text"):
+            return result
 
     raise RuntimeError(f"Все провайдеры транскрипции не справились: {file_path}")
