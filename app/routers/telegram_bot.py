@@ -132,7 +132,10 @@ async def _typing_loop(chat_id: str):
 
     async def _loop():
         while not stop.is_set():
-            await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
+            try:
+                await _tg_api("sendChatAction", chat_id=chat_id, action="typing")
+            except Exception as e:
+                logger.warning(f"sendChatAction failed: {e}")
             try:
                 await asyncio.wait_for(stop.wait(), timeout=4)
             except asyncio.TimeoutError:
@@ -1649,6 +1652,12 @@ async def _handle_chat_message(chat_id: str, text: str, is_template: bool = Fals
             result = await _send_long_message(chat_id, answer,
                                               reply_markup=_chat_keyboard(meeting_id))
 
+            # If send failed entirely — notify user (answer saved in DB for web UI)
+            if not result or not result.get("ok"):
+                logger.error(f"Failed to deliver AI answer for meeting {meeting_id}: {result}")
+                await _tg_send(chat_id,
+                    "Ответ не удалось отправить в Telegram. Откройте запись в веб-кабинете — ответ сохранён.")
+
             # Track template response for cleanup on next template click
             if is_template and result and result.get("ok"):
                 _last_template_msg[chat_id] = result.get("result", {}).get("message_id", 0)
@@ -1683,13 +1692,20 @@ async def _send_long_message(chat_id: str, text: str, parse_mode: str = "Markdow
         chunks.append(current.strip())
 
     total = len(chunks)
+    result = None
+    current_parse_mode = parse_mode
     for i, chunk in enumerate(chunks):
         is_last = i == total - 1
-        # Add chunk numbering
         if total > 1:
             chunk = f"({i+1}/{total})\n\n{chunk}"
         markup = reply_markup if is_last else None
-        result = await _tg_send(chat_id, chunk, parse_mode=parse_mode, reply_markup=markup)
+        result = await _tg_send(chat_id, chunk, parse_mode=current_parse_mode, reply_markup=markup)
+
+        if not result or not result.get("ok"):
+            logger.warning(f"Chunk {i+1}/{total} failed, switching to plain text for remaining chunks")
+            current_parse_mode = None
+            result = await _tg_send(chat_id, chunk, parse_mode=None, reply_markup=markup)
+
         if not is_last:
             await asyncio.sleep(0.3)
     return result
