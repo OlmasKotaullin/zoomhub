@@ -58,21 +58,30 @@ async def _split_audio_into_chunks(file_path: str, chunk_sec: int = CHUNK_DURATI
     offset = 0
     index = 0
 
+    is_opus = src.suffix.lower() == ".opus"
+
     while offset < duration:
         chunk_path = src.parent / f"{src.stem}_chunk{index:02d}.opus"
         logger.info(f"Splitting chunk {index} at offset {offset}s (duration {chunk_sec}s)...")
 
+        if is_opus:
+            # Stream-copy: сек вместо минут на больших файлах (no re-encode)
+            cmd = ["ffmpeg", "-ss", str(offset), "-t", str(chunk_sec),
+                   "-i", file_path, "-c", "copy", "-y", str(chunk_path)]
+        else:
+            cmd = ["ffmpeg", "-ss", str(offset), "-t", str(chunk_sec),
+                   "-i", file_path,
+                   "-ac", "1", "-ar", "16000",
+                   "-c:a", "libopus", "-b:a", "24k",
+                   "-y", str(chunk_path)]
+
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-ss", str(offset), "-t", str(chunk_sec),
-            "-i", file_path,
-            "-ac", "1", "-ar", "16000",
-            "-c:a", "libopus", "-b:a", "24k",
-            "-y", str(chunk_path),
+            *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
         try:
-            await asyncio.wait_for(proc.wait(), timeout=600)
+            await asyncio.wait_for(proc.wait(), timeout=300)
         except asyncio.TimeoutError:
             proc.kill()
             logger.error(f"ffmpeg chunk split timeout at offset {offset}s")
