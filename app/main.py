@@ -49,6 +49,10 @@ async def lifespan(app: FastAPI):
     from app.services.zoom_user_poller import start_user_polling
     tasks.append(asyncio.create_task(start_user_polling()))
 
+    # Monitor: алерт в Telegram если локальный агент молчит >48ч
+    from app.services.agent_monitor import start_agent_monitor
+    tasks.append(asyncio.create_task(start_agent_monitor()))
+
     # Register Telegram bot commands menu
     try:
         from app.routers.telegram_bot import setup_bot_commands

@@ -299,10 +299,11 @@ async def get_agent_token(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Generate a long-lived token (stored in user record)
-    if not user.agent_api_token:
-        token = create_token(user.id)  # Uses standard JWT
-        user.agent_api_token = token
+    # Permanent API key (не JWT — не истекает). Мигрируем старые JWT-токены на
+    # новый формат при первом обращении после апдейта сервера.
+    from app.auth import create_agent_api_key, is_agent_api_key
+    if not user.agent_api_token or not is_agent_api_key(user.agent_api_token):
+        user.agent_api_token = create_agent_api_key()
         db.commit()
 
     return {"token": user.agent_api_token}

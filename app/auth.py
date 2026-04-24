@@ -1,5 +1,6 @@
-"""Authentication utilities: password hashing, JWT tokens."""
+"""Authentication utilities: password hashing, JWT tokens, agent API keys."""
 
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -8,6 +9,8 @@ from jose import JWTError, jwt
 from app.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_HOURS
 
 ALGORITHM = "HS256"
+
+AGENT_API_KEY_PREFIX = "zh_"  # префикс, чтобы отличать permanent API-ключи агента от JWT
 
 
 def hash_password(password: str) -> str:
@@ -31,3 +34,16 @@ def decode_token(token: str) -> int | None:
         return int(user_id) if user_id else None
     except (JWTError, ValueError):
         return None
+
+
+def create_agent_api_key() -> str:
+    """Генерирует permanent API-ключ для локального агента.
+
+    Не JWT — нет exp. Валидируется сравнением с User.agent_api_token в БД.
+    Отозвать можно только явно (кнопка "перегенерировать" в UI).
+    """
+    return f"{AGENT_API_KEY_PREFIX}{secrets.token_urlsafe(48)}"
+
+
+def is_agent_api_key(token: str) -> bool:
+    return token.startswith(AGENT_API_KEY_PREFIX)

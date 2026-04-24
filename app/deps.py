@@ -8,14 +8,19 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import decode_token
+from app.auth import decode_token, is_agent_api_key
 from app.database import get_db
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
-    """Return User or None — for routes that work both ways."""
+    """Return User or None — for routes that work both ways.
+
+    Поддерживает два типа токенов:
+      - JWT (cookie session_token или Bearer) — c exp
+      - Agent API key (префикс zh_) — permanent, сравнивается с User.agent_api_token
+    """
     from app.models import User
 
     token = request.cookies.get("session_token")
@@ -26,6 +31,13 @@ def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
     if not token:
         return None
 
+    # Permanent agent API key — ищем по БД
+    if is_agent_api_key(token):
+        return db.query(User).filter(
+            User.agent_api_token == token, User.is_active == True  # noqa: E712
+        ).first()
+
+    # Обычный JWT
     user_id = decode_token(token)
     if not user_id:
         return None
