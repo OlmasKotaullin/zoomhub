@@ -58,22 +58,26 @@ async def _check_once():
             if last and last > cooldown_threshold:
                 continue  # уже напоминали недавно
 
+            # Агент грузит с source=upload. Смотрим именно такие встречи —
+            # это доказательство, что юзер реально пользовался агентом.
             last_upload = (
                 db.query(Meeting)
                 .filter(
                     Meeting.user_id == user.id,
-                    Meeting.source == MeetingSource.zoom,
+                    Meeting.source == MeetingSource.upload,
                 )
                 .order_by(Meeting.created_at.desc())
                 .first()
             )
 
-            if last_upload and last_upload.created_at > threshold.replace(tzinfo=None):
-                continue  # недавно была активность
+            if last_upload is None:
+                continue  # юзер никогда не грузил через агент — не про что алертить
 
-            hours = int((now - (last_upload.created_at.replace(tzinfo=timezone.utc) if last_upload else now - timedelta(days=999)))
-                        .total_seconds() / 3600) if last_upload else 999
+            last_dt = last_upload.created_at.replace(tzinfo=timezone.utc)
+            if last_dt > threshold:
+                continue  # активность в пределах окна
 
+            hours = int((now - last_dt).total_seconds() / 3600)
             text = (
                 f"Локальный ZoomHub-агент молчит уже {hours} ч.\n\n"
                 f"Проверь: идёт ли он в процессах (launchctl list | grep zoomhub), "
