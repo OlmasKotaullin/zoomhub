@@ -252,7 +252,7 @@ class SetupHandler(BaseHTTPRequestHandler):
                 cfg["token"] = token
                 cfg["server"] = DEFAULT_SERVER
                 cfg["folder"] = folder
-                cfg["mode"] = "full"
+                cfg["mode"] = "upload-only"
                 cfg["api_id"] = DEFAULT_API_ID
                 cfg["api_hash"] = DEFAULT_API_HASH
                 cfg["bot_username"] = DEFAULT_BOT

@@ -170,30 +170,48 @@ def upload_transcript(server: str, token: str, title: str,
         return False
 
 
-def upload_audio_fallback(server: str, token: str, filepath: Path) -> bool:
-    """Fallback: загружает аудио на сервер (транскрипция на сервере)."""
+def upload_audio_fallback(server: str, token: str, filepath: Path, retries: int = 3) -> bool:
+    """Fallback: загружает аудио на сервер (транскрипция на сервере).
+
+    Retry до `retries` раз при SSL/сетевых обрывах. В логах видели
+    `SSL: UNEXPECTED_EOF_WHILE_READING` на первой попытке — одна повторка решает.
+    """
     url = f"{server.rstrip('/')}/api/agent/upload"
     headers = {"Authorization": f"Bearer {token}"}
     print(f"  📤 Fallback: загрузка аудио на сервер...", flush=True)
 
-    try:
-        with open(filepath, "rb") as f:
-            resp = httpx.post(
-                url, headers=headers,
-                files={"file": (filepath.name, f, "application/octet-stream")},
-                data={"title": filepath.stem},
-                timeout=600,
-            )
-        if resp.status_code == 200:
-            data = resp.json()
-            print(f"  ✅ Аудио загружено: {data.get('title', '')} (ID: {data.get('id', '')})", flush=True)
-            return True
-        else:
-            print(f"  ❌ Ошибка {resp.status_code}", flush=True)
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            with open(filepath, "rb") as f:
+                resp = httpx.post(
+                    url, headers=headers,
+                    files={"file": (filepath.name, f, "application/octet-stream")},
+                    data={"title": filepath.stem},
+                    timeout=httpx.Timeout(connect=30, read=600, write=600, pool=30),
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                print(f"  ✅ Аудио загружено: {data.get('title', '')} (ID: {data.get('id', '')})", flush=True)
+                return True
+            if resp.status_code in (502, 503, 504) and attempt < retries:
+                print(f"  ⚠️  {resp.status_code}, retry {attempt}/{retries}", flush=True)
+                time.sleep(5 * attempt)
+                continue
+            print(f"  ❌ Ошибка сервера {resp.status_code}: {resp.text[:200]}", flush=True)
             return False
-    except Exception as e:
-        print(f"  ❌ Ошибка: {e}", flush=True)
-        return False
+        except (httpx.ReadError, httpx.WriteError, httpx.ConnectError, httpx.RemoteProtocolError) as e:
+            last_err = e
+            if attempt < retries:
+                print(f"  ⚠️  Сетевой обрыв ({type(e).__name__}), retry {attempt}/{retries}", flush=True)
+                time.sleep(5 * attempt)
+                continue
+        except Exception as e:
+            print(f"  ❌ Ошибка: {e}", flush=True)
+            return False
+
+    print(f"  ❌ Все попытки исчерпаны: {last_err}", flush=True)
+    return False
 
 
 def _transcript_cache_path(filepath: Path) -> Path:
@@ -225,7 +243,7 @@ def _save_transcript_cache(filepath: Path, result: dict):
 
 async def process_file(filepath: Path, cfg: dict) -> bool:
     """Обработка одного файла: Буквица → сервер."""
-    mode = cfg.get("mode", "full")
+    mode = cfg.get("mode", "upload-only")
     server = cfg.get("server", DEFAULT_SERVER)
     token = cfg.get("token", "")
 
@@ -299,10 +317,10 @@ async def run_setup():
 
     # Режим
     print("\nРежим работы:")
-    print("  1. Полный — Буквица локально + саммари на сервере (рекомендуется)")
-    print("  2. Только загрузка — аудио отправляется на сервер (транскрипция на сервере)")
+    print("  1. Только загрузка — аудио отправляется на сервер, ZoomHub транскрибирует сам (рекомендуется)")
+    print("  2. Полный — локальная транскрипция через Буквицу + саммари на сервере")
     mode_choice = input("Выберите [1]: ").strip()
-    cfg["mode"] = "upload-only" if mode_choice == "2" else "full"
+    cfg["mode"] = "full" if mode_choice == "2" else "upload-only"
 
     if cfg["mode"] == "full":
         # Настройка Telegram
@@ -359,7 +377,7 @@ async def main_async():
 
     folder = Path(cfg.get("folder", default_zoom_folder()))
     server = cfg.get("server", DEFAULT_SERVER)
-    mode = cfg.get("mode", "full")
+    mode = cfg.get("mode", "upload-only")
     state_path = folder / STATE_FILE
 
     print(f"🎯 ZoomHub Agent v2", flush=True)
@@ -385,34 +403,41 @@ async def main_async():
     print(f"📂 Обработано: {len(processed)} файлов", flush=True)
     print(f"📅 С: {datetime.fromtimestamp(since_ts).strftime('%Y-%m-%d') if since_ts else 'все'}\n", flush=True)
 
-    while True:
-        new_files = find_new_files(folder, processed, since_ts)
+    try:
+        while True:
+            new_files = find_new_files(folder, processed, since_ts)
 
-        if new_files:
-            print(f"🔍 Найдено {len(new_files)} новых файлов:", flush=True)
-            for filepath in new_files:
-                print(f"\n  📄 {filepath.name}", flush=True)
+            if new_files:
+                print(f"🔍 Найдено {len(new_files)} новых файлов:", flush=True)
+                for filepath in new_files:
+                    print(f"\n  📄 {filepath.name}", flush=True)
 
-                if not is_stable(filepath):
-                    print(f"  ⏳ Файл записывается, пропускаю...", flush=True)
-                    continue
+                    if not is_stable(filepath):
+                        print(f"  ⏳ Файл записывается, пропускаю...", flush=True)
+                        continue
 
-                fh = file_hash(filepath)
-                success = await process_file(filepath, cfg)
-                if success:
-                    processed.add(fh)
-                    # Помечаем двойник (audio↔video) как обработанный
-                    zid = _extract_zoom_id(filepath.name)
-                    if zid:
-                        for sibling in filepath.parent.iterdir():
-                            if sibling != filepath and _extract_zoom_id(sibling.name) == zid:
-                                processed.add(file_hash(sibling))
-                    save_state(state_path, processed)
+                    fh = file_hash(filepath)
+                    success = await process_file(filepath, cfg)
+                    if success:
+                        processed.add(fh)
+                        zid = _extract_zoom_id(filepath.name)
+                        if zid:
+                            for sibling in filepath.parent.iterdir():
+                                if sibling != filepath and _extract_zoom_id(sibling.name) == zid:
+                                    processed.add(file_hash(sibling))
+                        save_state(state_path, processed)
 
-        if args.once:
-            break
+            if args.once:
+                break
 
-        time.sleep(POLL_INTERVAL)
+            await asyncio.sleep(POLL_INTERVAL)
+    finally:
+        # Корректно закрываем Telethon-клиент перед выходом
+        try:
+            from bukvitsa_local import shutdown_client
+            await shutdown_client()
+        except Exception:
+            pass
 
 
 def main():
